@@ -1,0 +1,148 @@
+import os
+import re
+import sys
+import json
+import time
+import string
+import random
+import subprocess
+import multiprocessing
+
+def generate_random_string(length):
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
+def get_logic(file):
+    with open(file, "r") as f:
+        content = f.read()
+        m = re.search("set-logic ([A-Z_]+)", content) 
+        if m: 
+            return m[1]
+    return None
+
+def select_solver_for_logic(logic: str):
+    return 'z3pp-at-smt-comp-2023-bin'
+    if logic == 'QF_LRA':
+        return 'opensmt-2.5.2-bin'
+    elif logic == 'QF_LIA':
+        return 'opensmt-2.5.2-bin'
+    elif logic == 'QF_NRA':
+        return 'cvc5-1.0.8-bin'
+    elif logic == 'QF_NIA':
+        return 'z3-4.12.1-bin'
+    else:
+        assert(False)
+
+if __name__ == '__main__':
+    output_total_time = False
+    
+    if output_total_time:
+        start_time = time.time()
+    
+    request_directory = sys.argv[1]
+    with open(f'{request_directory}/input.json', 'r') as file:
+        config_data: dict = json.load(file)
+
+    formula_file = config_data['formula_file']
+    timeout_seconds: int = config_data['timeout_seconds']
+    worker_node_ips = config_data['worker_node_ips']
+    worker_node_cores = config_data.get('worker_node_cores', None)
+    
+    formula_logic = get_logic(formula_file)
+    
+    base_solver = select_solver_for_logic(formula_logic)
+    
+    output_dir = request_directory
+    script_path = os.path.abspath(__file__)
+    script_dir = os.path.dirname(script_path)
+    
+    # ##//linxi-test
+    # print(f'script_path: {script_path}')
+        
+    node_number = len(worker_node_ips)
+    host_core_number = multiprocessing.cpu_count()
+
+    
+    if not os.path.exists(output_dir):
+        os.system(f'mkdir -p {output_dir}')
+
+    temp_folder_name = generate_random_string(16)
+    
+    # ##//linxi-test
+    # temp_folder_name = 'ap-test'
+    # print(temp_folder_name)
+    
+    temp_folder_path = f'/tmp/ap-files/{temp_folder_name}'
+    
+    if not os.path.exists(temp_folder_path):
+        os.system(f'mkdir -p {temp_folder_path}')
+    
+    # ##//linxi-test
+    # print(temp_folder_path)
+    
+    # solving_time_limit = timeout_seconds - 10
+    solving_time_limit = timeout_seconds
+
+    leader_cmd_paras = [
+        f'python3 {script_dir}/APLeader.py',
+        f'--file {formula_file}',
+        f'--output-dir {output_dir}',
+        f'--temp-dir {temp_folder_path}',
+        f'--time-limit {solving_time_limit}'
+    ]
+    leader_cmd = ' '.join(leader_cmd_paras)
+    
+    coordinator_cmd_paras = [
+        f'python3 {script_dir}/APCoordinator.py',
+        f'--temp-dir {temp_folder_path}',
+        r'--available-cores {}',
+        f'--partitioner {script_dir}/binary-files/partitioner-bin',
+        f'--solver {script_dir}/binary-files/{base_solver}',
+    ]
+    coordinator_cmd = ' '.join(coordinator_cmd_paras)
+    
+    with open(f'{output_dir}/rankfile', 'w') as rfile:
+        for i in range(node_number):
+            node_ip = worker_node_ips[i]
+            node_core = worker_node_cores[i]
+            rfile.write(f'rank {i}={worker_node_ips[i]} slot=0 {coordinator_cmd.format(node_core)}\n')
+        
+        rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=1 {leader_cmd}\n')
+            # ##//linxi-test
+            # print(f'{node_ip} slots={slot}\n')
+    
+    cmd_paras = [
+        'mpiexec',
+        ### COMP-UPDATE ###
+        # '--mca btl_tcp_if_include eth0',
+        '--mca btl_tcp_if_include enp1s0f1',
+        '--allow-run-as-root',
+        '--use-hwthread-cpus',
+        '--bind-to none', '--report-bindings',
+        f'--rankfile {output_dir}/rankfile'
+    ]
+    
+    # ##//linxi-test
+    # print(f"command:\n{cmd_paras}")
+    
+    result = subprocess.run(
+        cmd_paras,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    
+    # ##//linxi-test
+    # print(f'stdout:')
+    # print(result.stdout.decode("utf-8"))
+    # print(f'stderr:')
+    # print(result.stderr.decode("utf-8"))
+    
+    sys.stdout.write(result.stdout.decode("utf-8"))
+    # sys.stderr.write(result.stderr.decode("utf-8"))
+    
+    if output_total_time:
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f'total cost time (start MPI and clean up):\n{execution_time}')
+    

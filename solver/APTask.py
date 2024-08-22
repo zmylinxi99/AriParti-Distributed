@@ -1,4 +1,13 @@
 
+from enum import Enum
+
+class TaskStatus(Enum):
+    waiting = 1
+    solving = 2
+    unknown = 10
+    sat = 11
+    unsat = 12
+
 # Task maintained by the Leader and Coordinator
 class Task():
     def __init__(self, p, id, parent, make_time):
@@ -6,14 +15,14 @@ class Task():
         self.id = id
         self.parent = parent
         self.time_infos = {'make': make_time}
-        # waiting running sat unsat unknown
-        # waiting -> running BY (run task)
+        # waiting solving sat unsat unknown
+        # waiting -> solving BY (run task)
         #         -> unsat   BY (ancester, children, partitioner)
         #         -> unknown BY (children)
-        # running -> sat BY (solver)
+        # solving -> sat BY (solver)
         #         -> unsat BY (solver, ancester, children, partitioner)
         #         -> unknown BY (solver, children)
-        self.state = 'waiting'
+        self.status = TaskStatus.waiting
         self.reason = -3
         self.subtasks = []
         
@@ -23,7 +32,7 @@ class Task():
             pid = self.parent.id
         ret = f'id: {self.id}'
         ret += f', parent: {pid}'
-        ret += f', state: {self.state}'
+        ret += f', status: {self.status}'
         if self.reason != -3:
             ret += f', reason: {self.reason}'
         if len(self.subtasks) > 0:
