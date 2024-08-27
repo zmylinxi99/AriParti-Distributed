@@ -2,7 +2,6 @@
 import time
 from enum import Enum
 
-
 class PartitionNodeStatus(Enum):
     # unsolved = 0
     # unsat_by_itself   = 1

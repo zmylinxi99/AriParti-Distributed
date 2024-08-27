@@ -13,9 +13,6 @@ class ControlMessage:
         # terminate coordinator {rank}
         terminate_coordinator = auto()
         
-        # # solve leader-0
-        # initiate_leader_0 = auto()
-        
         def is_assign_node(self):
             return self == ControlMessage.L2C.assign_node
         
@@ -25,6 +22,8 @@ class ControlMessage:
         def is_terminate_coordinator(self):
             return self == ControlMessage.L2C.terminate_coordinator
     
+        # # solve leader-0
+        # initiate_leader_0 = auto()
         # def is_initiate_leader_0(self):
         #     return self == ControlMessage.L2C.initiate_leader_0
     

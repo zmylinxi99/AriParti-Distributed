@@ -52,7 +52,6 @@ class PartitionNode:
         ret += f'\ntime-infos: {self.time_infos}\n'
         return ret
 
-
 class PartitionTree:
     
     def __init__(self, start_time):
@@ -94,8 +93,6 @@ class PartitionTree:
         self.update_node_status(t, PartitionNodeStatus.unsat_by_ancester)
         for child in t.children:
             self.unsat_push_down(child)
-    
-    
 
 # ParallelNodeStatus
 # waiting solving sat unsat unknown
@@ -132,9 +129,6 @@ class ParallelNodeStatus(PartitionNodeStatus):
     terminated  = 32
     error       = 33
     
-
-
-
 class ParallelNode:
     def update_status(self, status, current_time):
         self.time_infos[status] = current_time
@@ -171,7 +165,6 @@ class ParallelNode:
             ret += f', subtasks: {stid}'
         ret += f'\ntime-infos: {self.time_infos}\n'
         return ret
-
 
 class ParallelTree:
     
@@ -215,4 +208,3 @@ class ParallelTree:
         for child in t.children:
             self.unsat_push_down(child)
     
-

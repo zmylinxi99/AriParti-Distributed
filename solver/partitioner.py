@@ -20,7 +20,6 @@ class PartitionerStatus(Enum):
     
     def is_unknown(self):
         return self == PartitionerStatus.unknown
-    
 
 class Partitioner:
     def __init__(self, p: subprocess.Popen):
