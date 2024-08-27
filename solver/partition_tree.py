@@ -3,7 +3,6 @@ import time
 from enum import Enum
 
 
-
 class PartitionNodeStatus(Enum):
     # unsolved = 0
     # unsat_by_itself   = 1
@@ -101,7 +100,9 @@ class PartitionTree:
     def get_result(self):
         return self.root.status
     
-    def update_node_status(self, node: PartitionNode, status, reason):
+    def update_node_status(self, node: PartitionNode, 
+                           status: PartitionNodeStatus,
+                           reason: PartitionNodeSolvedReason):
         current_time = self.get_current_time()
         node.update_status(status, reason, current_time)
         # if status == PartitionNodeStatus.unsat:
@@ -131,8 +132,10 @@ class PartitionTree:
         for child in node.children:
             self.unsat_push_down(child)
     
-    def node_solved(self, node: PartitionNode, status: PartitionNodeStatus):
-        self.update_node_status(node, status)
+    def node_solved(self, 
+            node: PartitionNode, status: PartitionNodeStatus,
+            reason: PartitionNodeSolvedReason = PartitionNodeSolvedReason.itself):
+        self.update_node_status(node, status, reason)
         if status.is_sat():
             if node != self.root:
                 self.update_node_status(self.root, 
@@ -147,6 +150,7 @@ class PartitionTree:
         else:
             assert(False)
     
+    ### TBD ### ParallelNodeStatus
     def node_id_solved(self, node_id: int, status: PartitionNodeStatus):
         self.node_solved(self.nodes[node_id], status)
 
@@ -169,10 +173,18 @@ class ParallelNodeStatus(PartitionNodeStatus):
     # unsolved means waiting
     solving = 10
     terminated = 11
+    
+    def is_solving(self):
+        return self == ParallelNodeStatus.solving
+
+class ParallelNodeSolvedReason(PartitionNodeSolvedReason):
+    partitioner = 10
 
 class ParallelNode(PartitionNode):
     def __init__(self, id, parent, make_time):
         super().__init__(id, parent, make_time)
+        self.status: ParallelNodeStatus
+        self.reason: ParallelNodeSolvedReason
         ### TBD ###
     
     def __repr__(self) -> str:
@@ -184,6 +196,7 @@ class ParallelNode(PartitionNode):
 class ParallelTree(PartitionTree):
     def __init__(self, start_time):
         super().__init__(start_time)
+        self.solvings = []
         # self.node_status_dict = {
         #     PartitionNodeStatus.unsolved: [],
         #     PartitionNodeStatus.unsolved: [],
@@ -199,6 +212,79 @@ class ParallelTree(PartitionTree):
         #     # 'ended': [],
         # }
     
+    def get_next_waiting_node(self):
+        pass
+    
+    def running_nodes_number(self):
+        pass
+    
+    # if sta.is_sat():
+    #     self.result = ParallelNodeStatus.sat
+    #     # self.reason = t.id
+    #     self.write_line_to_log(f'sat-task {node.id}')
+    #     return False
+    # elif sta.is_unsat():
+        
+    #     self.write_line_to_partitioner(f'unsat-node {node.id}')
+    #     self.tree.unsat_push_down()
+    #     if t.parent != None:
+    #         self.push_up(t.parent, t.id)
+    #     root_task: Task = self.tasks[0]
+    #     if root_task.status == 'unsat':
+    #         self.result = ParallelNodeStatus.unsat
+    #         self.reason = root_task.reason
+    #         self.write_line_to_log(f'unsat-root-task {root_task.reason}')
+    #         return False
+    #     for st in t.subtasks:
+    #         self.push_down(st, t.id)
+    # else:
+    #     assert(False)
+    # return False
+    def solve_node(self, node: ParallelNode, p):
+        node.assign_to = p
+        node.update_status(ParallelNodeStatus.solving,
+                           ParallelNodeSolvedReason.itself,
+                           self.get_current_time())
+        pass
+    
+    def get_path(self, node: ParallelNode):
+        ret = []
+        current = node
+        while True:
+            if current.parent == None:
+                break
+            assert(isinstance(current.parent, ParallelNode))
+            ret.append(current.parent.children.index(current))            
+            current = current.parent
+        ret.reverse()
+        return ret
+    
+    # def make_task(self, id, pid, is_unsat):
+    #     parent: Task = None
+    #     if (pid != -1):
+    #         parent = self.id2task[pid]
+    #     t = Task(None, id, parent, self.get_current_time())
+        
+    #     if is_unsat:
+    #         self.update_task_status(t, 'unsat')
+    #         t.reason = -1
+    #         if parent != None:
+    #             self.push_up(parent, t.id)
+    #     else:
+    #         self.update_task_status(t, 'waiting')
+        
+    #     if parent != None:
+    #         if t.status != 'unsat' and parent.status == 'unsat':
+    #             self.propagate_unsat(t, parent.reason)
+    #         parent.subtasks.append(t)
+        
+    #     # self.write_line_to_log(f'make-task {t}')
+        
+    #     self.id2task[id] = t
+    #     self.tasks.append(t)
+    #     ### TBD ###
+    #     pass
+        
     
 class DistributedNodeStatus(PartitionNodeStatus):
     pass
