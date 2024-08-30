@@ -1,19 +1,16 @@
 
 import time
+import queue
 from enum import Enum
 
 class PartitionNodeStatus(Enum):
-    # unsolved = 0
-    # unsat_by_itself   = 1
-    # unsat_by_ancester = 2
-    # unsat_by_children = 3
-    # sat = 4
-    # error = 5
-    
     unsolved = 0
     sat = 1
     unsat = 2
     error = 3
+    
+    def is_unsolved(self):
+        return self == PartitionNodeStatus.unsolved
     
     def is_sat(self):
         return self == PartitionNodeStatus.sat
@@ -31,22 +28,32 @@ class PartitionNodeSolvedReason(Enum):
     children = 2
 
 class PartitionNode:
+    assign_to = None
+    time_infos = {}
+    children = []
+    status: PartitionNodeStatus
+    reason: PartitionNodeSolvedReason
+    
     def __init__(self, id, parent, make_time):
-        self.assign_to = None
-        self.time_infos = {}
-        self.children = []
-        self.status: PartitionNodeStatus
-        self.reason: PartitionNodeSolvedReason
         self.id = id
         self.parent = parent
         self.update_status(PartitionNodeStatus.unsolved, 
                            PartitionNodeSolvedReason.itself, 
                            make_time)
 
+    # def _update_status(self, status, reason, current_time):
     def update_status(self, status, reason, current_time):
         self.time_infos[status] = current_time
         self.status = status
         self.reason = reason
+    
+    # def set_unsat(self, reason, current_time):
+    #     self._update_status(PartitionNodeStatus.unsat,
+    #                        reason, current_time)
+    
+    # def set_sat(self, reason, current_time):
+    #     self._update_status(PartitionNodeStatus.sat,
+    #                        reason, current_time)
     
     def can_reason_unsat(self):
         if len(self.children) == 0:
@@ -57,7 +64,7 @@ class PartitionNode:
                 return False
         return True
     
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         pid = -1
         if (self.parent != None):
             pid = self.parent.id
@@ -71,6 +78,7 @@ class PartitionNode:
         return ret
 
 class PartitionTree:
+    nodes = []
     def __init__(self, start_time):
         # self.node_status_dict = {
         #     # 'waiting': [],
@@ -79,10 +87,8 @@ class PartitionTree:
         # }
         # self.proxy_functions = []
         
-        self.nodes = []
-        
         self.start_time = start_time
-        self.root = self.make_node(None)
+        self.root: ParallelNode = self.make_node(None)
         
     def get_current_time(self):
         return time.time() - self.start_time
@@ -99,10 +105,11 @@ class PartitionTree:
     def get_result(self):
         return self.root.status
     
-    def update_node_status(self, node: PartitionNode, 
+    def update_node_status(self, node: PartitionNode,
                            status: PartitionNodeStatus,
                            reason: PartitionNodeSolvedReason):
         current_time = self.get_current_time()
+        
         node.update_status(status, reason, current_time)
         # if status == PartitionNodeStatus.unsat:
         #     for func in self.proxy_functions:
@@ -110,10 +117,7 @@ class PartitionTree:
         # if status > PartitionNodeStatus.ended:
         #     status = PartitionNodeStatus.ended
             
-    def unsat_push_up(self, node):
-        if node == None:
-            return
-        assert(isinstance(node, PartitionNode))
+    def unsat_push_up(self, node: PartitionNode):
         if node.status.is_unsat():
             return
         if node.can_reason_unsat():
@@ -141,17 +145,28 @@ class PartitionTree:
                                         PartitionNodeStatus.sat, 
                                         PartitionNodeSolvedReason.children)
         elif status.is_unsat():
+            if node.parent != None:
+                self.unsat_push_up(node.parent)
             self.unsat_push_up(node.parent)
             if self.is_done():
                 return
             for child in node.children:
                 self.unsat_push_down(child)
+            ### TBD ###
+            # if node.parent != None and \
+            #    not node.parent.status.is_unsat():
+            #     self.unsat_push_up(node.parent)
+            # if self.is_done():
+            #     return
+            # for child in node.children:
+            #     if not child.status.is_unsat():
+            #         self.unsat_push_down(child)
         else:
             assert(False)
     
-    ### TBD ### ParallelNodeStatus
-    def node_id_solved(self, node_id: int, status: PartitionNodeStatus):
-        self.node_solved(self.nodes[node_id], status)
+    # ### TBD ### ParallelNodeStatus
+    # def node_id_solved(self, node_id: int, status: PartitionNodeStatus):
+    #     self.node_solved(self.nodes[node_id], status)
 
 # ParallelNodeStatus
 # waiting solving sat unsat unknown
@@ -162,13 +177,6 @@ class PartitionTree:
 #         -> unsat BY (solver, ancester, children, partitioner)
 #         -> unknown BY (solver, children)
 class ParallelNodeStatus(PartitionNodeStatus):
-    # unsolved = 0
-    # unsat_by_itself   = 1
-    # unsat_by_ancester = 2
-    # unsat_by_children = 3
-    # sat = 4
-    # error = 5
-    
     # unsolved means waiting
     solving = 10
     terminated = 11
@@ -180,22 +188,26 @@ class ParallelNodeSolvedReason(PartitionNodeSolvedReason):
     partitioner = 10
 
 class ParallelNode(PartitionNode):
+    status: ParallelNodeStatus
+    reason: ParallelNodeSolvedReason
+    unsat_percentage = 0.0
+    
     def __init__(self, id, parent, make_time):
         super().__init__(id, parent, make_time)
-        self.status: ParallelNodeStatus
-        self.reason: ParallelNodeSolvedReason
         ### TBD ###
     
-    def __repr__(self) -> str:
-        ret = super().__repr__()
-        ### TBD ###
-        return ret
+    def update_unsat_percentage(self):
+        self.unsat_percentage = 0.0
+        for child in self.children:
+            child: ParallelNode
+            self.unsat_percentage += child.unsat_percentage
 
 
 class ParallelTree(PartitionTree):
+    solvings = []
+    waitings = queue.Queue()
     def __init__(self, start_time):
         super().__init__(start_time)
-        self.solvings = []
         # self.node_status_dict = {
         #     PartitionNodeStatus.unsolved: [],
         #     PartitionNodeStatus.unsolved: [],
@@ -212,9 +224,16 @@ class ParallelTree(PartitionTree):
         # }
     
     def get_next_waiting_node(self):
-        pass
+        while not self.waitings.empty():
+            node: ParallelNode = self.waitings.get()
+            if node.status.is_unsolved():
+                return node
+        return None
     
-    def running_nodes_number(self):
+    def set_node_split(self, node):
+        pass
+        
+    def select_split_node(self):
         pass
     
     # if sta.is_sat():
@@ -223,7 +242,6 @@ class ParallelTree(PartitionTree):
     #     self.write_line_to_log(f'sat-task {node.id}')
     #     return False
     # elif sta.is_unsat():
-        
     #     self.write_line_to_partitioner(f'unsat-node {node.id}')
     #     self.tree.unsat_push_down()
     #     if t.parent != None:
@@ -239,12 +257,20 @@ class ParallelTree(PartitionTree):
     # else:
     #     assert(False)
     # return False
+    
     def solve_node(self, node: ParallelNode, p):
+        assert(node.assign_to == None)
         node.assign_to = p
         node.update_status(ParallelNodeStatus.solving,
                            ParallelNodeSolvedReason.itself,
                            self.get_current_time())
         pass
+    
+    def node_solved(self, 
+            node: ParallelNode, status: ParallelNodeStatus,
+            reason: ParallelNodeSolvedReason = ParallelNodeSolvedReason.itself):
+        super().node_solved()
+        
     
     def get_path(self, node: ParallelNode):
         ret = []
@@ -293,10 +319,35 @@ class DistributedNodeSolvedReason(Enum):
     original = 10
 
 class DistributedNode(PartitionNode):
-    pass
+    dependency_children = []
+    dependency_parent = None
+    def __init__(self, id, parent, make_time):
+        super().__init__(id, parent, make_time)
+        ### TBD ###
+    
+    def update_status(self, status, reason, current_time):
+        super().update_status(status, reason, current_time)
+        ### TBD ###
 
 class DistributedTree(PartitionTree):
+    def __init__(self, start_time):
+        super().__init__(start_time)
     
-    pass
+    def assign_node(self, node: DistributedNode, coordinator_id: int):
+        node.assign_to = coordinator_id
     
+    def select_split_node(self):
+        ### TBD ###
+        pass
+    
+    def update_with_path(self, relative_root: DistributedNode, path: list, coordinator_id: int):
+        current = relative_root
+        for index in path:
+            if len(current.children) == 0:
+                current.children.append(self.make_node(current))
+                current.children.append(self.make_node(current))
+            current = current.children[index]
+            
+        self.assign_node(current, coordinator_id)
+        return current
     

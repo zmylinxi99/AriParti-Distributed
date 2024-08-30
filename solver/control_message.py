@@ -47,4 +47,12 @@ class ControlMessage:
         
         def is_send_subnode(self):
             return self == ControlMessage.C2C.send_subnode
+        
+    # Coordinator To Partitioner
+    class C2P(Enum):
+        pass
+    
+    # Partitioner To Coordinator
+    class P2C(Enum):
+        pass
     

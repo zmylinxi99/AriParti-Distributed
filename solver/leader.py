@@ -1,15 +1,38 @@
 import os
 import shutil
 import time
+import queue
 import logging
 import argparse
 import subprocess
 from datetime import datetime
 from mpi4py import MPI
+from partition_tree import DistributedNode
 from partition_tree import DistributedTree
 from partition_tree import DistributedNodeStatus
 from partition_tree import DistributedNodeSolvedReason
 from control_message import ControlMessage
+
+class CoordinatorInfo:
+    assigned = None
+    last_solving = 0.0
+    last_split = 0.0
+    solving_round = 0
+    split_count = 0
+    
+    def __init__(self, rank):
+        self.rank = rank
+    
+    def assign_node(self, node: DistributedNode, current_time):
+        self.assigned = node
+        self.last_solving = current_time
+        self.last_split = current_time
+        self.solving_round += 1
+        self.split_count = 0
+        
+    def split_node(self, current_time):
+        self.last_split = current_time
+        self.split_count += 1
 
 class Leader:
     def __init__(self):
@@ -17,7 +40,6 @@ class Leader:
         # self.solve_original_flag = False
         
         self.num_nodes = MPI.COMM_WORLD.Get_rank()
-        self.idle_coordinators = set(range(self.num_nodes))
         
         self.init_params()
         
@@ -35,9 +57,12 @@ class Leader:
         
         self.init_logging()
         logging.info(f'temp_folder_path: {self.temp_folder_path}')
-
-    def get_current_time(self):
-        return time.time() - self.start_time
+        
+        self.idle_coordinators = queue.Queue(range(self.num_nodes))
+        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_nodes)]
+        self.split_candidate = queue.Queue()
+        
+        self.split_stamp = 0.0
     
     def init_params(self):    
         arg_parser = argparse.ArgumentParser()
@@ -74,12 +99,14 @@ class Leader:
         formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
         logging.info(f'start-time {formatted_time} ({self.start_time})')
     
+    def get_current_time(self):
+        return time.time() - self.start_time
+    
     # solver original task with base solver
     def solve_original_task(self):
         # run original task
-        instance_path = f'{self.temp_folder_path}/tasks/original.smt2'
         cmd =  [self.solver_path,
-                instance_path
+                self.input_file_path
             ]
         logging.info('exec-command {}'.format(' '.join(cmd)))
         # print(" ".join(cmd))
@@ -90,20 +117,37 @@ class Leader:
                 text=True
             )
     
-    def init_original_task(self):
-        shutil.copyfile(self.input_file_path, 
-                        f'{self.temp_folder_path}/tasks/original.smt2')
-    
     def is_done(self):
         return self.tree.is_done()
     
     def get_result(self):
         return self.tree.get_result()
     
-    def split_node(self, coordinator_rank, path):
-        ### TBD ###
-        pass
+    def update_assign_coordinator(self, relative_root: DistributedNode, 
+                                  path: list, idle_coord: int):
+        current_time = self.get_current_time()
+        node = self.tree.update_with_path(relative_root, path, idle_coord)
+        self.coordinators[idle_coord].assign_node(node, current_time)
+        self.split_candidate.put((idle_coord, current_time))
     
+    def update_split_coordinator(self, split_coord: int):
+        current_time = self.get_current_time()
+        self.coordinators[split_coord].split_node(current_time)
+        self.split_candidate.put((split_coord, current_time))
+    
+    def add_split_dependency(self, split_coord: int, assign_coord: int):
+        split_node: DistributedNode = self.coordinators[split_coord].assigned
+        assign_node: DistributedNode = self.coordinators[assign_coord].assigned
+        split_node.dependency_children.append(assign_node)
+        assign_node.dependency_parent = split_node
+    
+    def update_split_assign_info(self, path: list, split_coord: int, idle_coord: int):
+        relative_root = self.coordinators[split_coord].assigned
+        assert(relative_root != None)
+        self.update_assign_coordinator(relative_root, path, idle_coord)
+        self.update_split_coordinator(split_coord)
+        
+        self.add_split_dependency(split_coord, idle_coord)
     
     def check_coordinators(self):
         msg_status = MPI.Status()
@@ -112,17 +156,19 @@ class Leader:
             msg_type = MPI.COMM_WORLD.recv(source=src, tag=1)
             assert(isinstance(msg_type, ControlMessage.C2L))
             if msg_type.is_send_path():
-                # split node {path}
-                path: list = MPI.COMM_WORLD.recv(source=src, tag=2)
+                # split node {path} to coordinator {target_rank}
+                path, target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
+                self.update_split_assign_info(path, src, target_rank)
                 ### TBD ###
                 pass
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
                 result = MPI.COMM_WORLD.recv(source=src, tag=2)
-                self.idle_coordinators.add(src)
-                self.tree.node_id_solved(src, result)
+                self.coordinators[src].assigned
+                self.tree.node_solved(src, result)
                 if self.is_done():
                     return
+                self.idle_coordinators.put(src)
             # elif msg_type.is_XXX:
             #     # coordinator {src} report current solving info
             #     ### TBD ###
@@ -149,21 +195,59 @@ class Leader:
                                      DistributedNodeSolvedReason.original)
         logging.info(f'solved-by-original {sta}')
 
-    # def assign_node_to(self, node_id, coordinator_rank):
-    #     # coordinator_rank = self.idle_coordinators.pop()
-    #     logging.info(f'assign node-{node_id} to coordinator-{coordinator_rank}')
-    #     ### TBD ###
-    #     MPI.COMM_WORLD.send(node_id, dest=coordinator_rank, tag=1)
-
     def assign_root_node(self):
         os.makedirs(f'{self.temp_folder_path}/tasks/round-0', exist_ok=True)
-        shutil.copyfile(f'{self.temp_folder_path}/tasks/original.smt2', 
+        shutil.copyfile(self.input_file_path, 
                         f'{self.temp_folder_path}/tasks/round-0/task-root.smt2')
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                             dest=0, tag=1)
+        
+        self.update_assign_coordinator(self.tree.root)
+    
+    def get_next_idle_coordinator(self):
+        # FIFO
+        if self.idle_coordinators.empty():
+            return None
+        return self.idle_coordinators.get()
+    
+    def select_coordinator_to_split(self):
+        # FIFO
+        while not self.split_candidate.empty():
+            coord_id, time_stamp = self.split_candidate.get()
+            # assert(isinstance(self.coordinators[ret], CoordinatorInfo))
+            split_coord: CoordinatorInfo = self.coordinators[coord_id]
+            if time_stamp != split_coord.last_split:
+                continue
+            if split_coord.assigned == None:
+                continue
+            return coord_id
+        
+        return None
+    
+    def send_split_message(self, split_coord, idle_coord):
+        MPI.COMM_WORLD.send(ControlMessage.L2C.request_split,
+                            dest=split_coord, tag=1)
+        MPI.COMM_WORLD.send(idle_coord, 
+                            dest=split_coord, tag=2)
+        
+    def send_assign_message(self, split_coord, idle_coord):
+        MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node,
+                            dest=idle_coord, tag=1)
+        MPI.COMM_WORLD.send(split_coord, 
+                            dest=idle_coord, tag=2)
+    
+    def assign_node_to_idle_coordinator(self):
+        idle_coord = self.get_next_idle_coordinator()
+        if idle_coord == None:
+            return
+        split_coord = self.select_coordinator_to_split()
+        if split_coord == None:
+            return
+        logging.info(f'assign node from coordinator-{split_coord} to coordinator-{idle_coord}')
+        self.send_split_message(split_coord, idle_coord)
+        self.send_assign_message(split_coord, idle_coord)
     
     def solve(self):
-        self.init_original_task()
         if self.solve_original_flag:
             self.solve_original_task()
         
@@ -174,14 +258,15 @@ class Leader:
                 self.check_original_task()
                 if self.is_done():
                     return
-            
             self.check_coordinators()
             if self.is_done():
                 return
+            self.assign_node_to_idle_coordinator()
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
-            time.sleep(0.1)
-    
+            if self.idle_coordinators.empty():
+                time.sleep(0.1)
+
     def terminate_coordinators(self):
         for i in range(self.num_nodes):
             MPI.COMM_WORLD.send(ControlMessage.L2C.terminate_coordinator,
@@ -207,16 +292,14 @@ class Leader:
         print(self.result)
         print(execution_time)
         
-        self.terminate_coordinators()
-        
         if self.output_dir_path != None:
             with open(f'{self.output_dir_path}/result.txt', 'w') as f:
                 f.write(f'{self.result}\n{execution_time}\n')
+        
+        self.terminate_coordinators()
         ### TBD: Terminate and clean up ###
         # MPI.COMM_WORLD.Abort()
 
 if __name__ == '__main__':
-    
-    # print(f'cmd_args.temp_dir: {cmd_args.temp_dir}')
     ap_leader = Leader()
     ap_leader()

@@ -21,7 +21,7 @@ def get_logic(file):
     return None
 
 def select_solver_for_logic(logic: str):
-    return 'z3pp-at-smt-comp-2023-bin'
+    # return 'z3pp-at-smt-comp-2023-bin'
     if logic == 'QF_LRA':
         return 'opensmt-2.5.2-bin'
     elif logic == 'QF_LIA':
@@ -48,9 +48,10 @@ if __name__ == '__main__':
     worker_node_ips = config_data['worker_node_ips']
     worker_node_cores = config_data.get('worker_node_cores', None)
     
-    formula_logic = get_logic(formula_file)
+    # formula_logic = get_logic(formula_file)
+    # base_solver = select_solver_for_logic(formula_logic)
     
-    base_solver = select_solver_for_logic(formula_logic)
+    base_solver = 'z3pp-at-smt-comp-2023-bin'
     
     output_dir = request_directory
     script_path = os.path.abspath(__file__)
@@ -63,8 +64,7 @@ if __name__ == '__main__':
     host_core_number = multiprocessing.cpu_count()
 
     
-    if not os.path.exists(output_dir):
-        os.system(f'mkdir -p {output_dir}')
+    os.makedirs(output_dir, exist_ok=True)
 
     temp_folder_name = generate_random_string(16)
     
@@ -74,8 +74,7 @@ if __name__ == '__main__':
     
     temp_folder_path = f'/tmp/ap-files/{temp_folder_name}'
     
-    if not os.path.exists(temp_folder_path):
-        os.system(f'mkdir -p {temp_folder_path}')
+    os.makedirs(temp_folder_path, exist_ok=True)
     
     # ##//linxi-test
     # print(temp_folder_path)
@@ -84,7 +83,7 @@ if __name__ == '__main__':
     solving_time_limit = timeout_seconds
 
     leader_cmd_paras = [
-        f'python3 {script_dir}/APLeader.py',
+        f'python3 {script_dir}/leader.py',
         f'--file {formula_file}',
         f'--output-dir {output_dir}',
         f'--temp-dir {temp_folder_path}',
@@ -93,7 +92,7 @@ if __name__ == '__main__':
     leader_cmd = ' '.join(leader_cmd_paras)
     
     coordinator_cmd_paras = [
-        f'python3 {script_dir}/APCoordinator.py',
+        f'python3 {script_dir}/coordinator.py',
         f'--temp-dir {temp_folder_path}',
         r'--available-cores {}',
         f'--partitioner {script_dir}/binary-files/partitioner-bin',
@@ -102,11 +101,11 @@ if __name__ == '__main__':
     coordinator_cmd = ' '.join(coordinator_cmd_paras)
     
     with open(f'{output_dir}/rankfile', 'w') as rfile:
-        for i in range(node_number):
+        rfile.write(f'rank 0={worker_node_ips[0]} slot=0 {coordinator_cmd.format(worker_node_cores[0] - 2)}\n')
+        for i in range(1, node_number):
             node_ip = worker_node_ips[i]
             node_core = worker_node_cores[i]
-            rfile.write(f'rank {i}={worker_node_ips[i]} slot=0 {coordinator_cmd.format(node_core)}\n')
-        
+            rfile.write(f'rank {i}={node_ip} slot=0 {coordinator_cmd.format(node_core)}\n')
         rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=1 {leader_cmd}\n')
             # ##//linxi-test
             # print(f'{node_ip} slots={slot}\n')
