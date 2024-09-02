@@ -29,13 +29,18 @@ class ControlMessage:
     
     # Coordinator To Leader
     class C2L(Enum):
-        # split node with relative {path} to coordinator [src]
-        send_path = auto()
+        # split node to coordinator [src]
+        split_succeed = auto()
+        # split failed
+        split_failed = auto()
         # coordinator [src] solved the assigned node
         notify_result = auto()
         
-        def is_send_path(self):
-            return self == ControlMessage.C2L.send_path
+        def is_split_succeed(self):
+            return self == ControlMessage.C2L.split_succeed
+        
+        def is_split_failed(self):
+            return self == ControlMessage.C2L.split_failed
         
         def is_notify_result(self):
             return self == ControlMessage.C2L.notify_result
@@ -54,5 +59,35 @@ class ControlMessage:
     
     # Partitioner To Coordinator
     class P2C(Enum):
-        pass
+        debug_info = 0
+        unknown_node = 1
+        unsat_node = 2
+        sat = 3
+        unsat = 4
+        unknown = 5
+        
+        def is_debug_info(self):
+            return self == ControlMessage.P2C.debug_info
+        
+        def is_unknown_node(self):
+            return self == ControlMessage.P2C.unknown_node
+        
+        def is_unsat_node(self):
+            return self == ControlMessage.P2C.unsat_node
+        
+        def is_sat(self):
+            return self == ControlMessage.P2C.sat
+        
+        def is_unsat(self):
+            return self == ControlMessage.P2C.unsat
+        
+        def is_unknown(self):
+            return self == ControlMessage.P2C.unknown
+        
+        def is_new_node(self):
+            return self.is_unknown_node() or self.is_unsat_node()
+        
+        def is_solved_result(self):
+            return self.is_sat() or self.is_unsat() or self.is_unknown()
     
+        

@@ -1,6 +1,7 @@
 
 import time
 import queue
+import subprocess
 from enum import Enum
 
 class PartitionNodeStatus(Enum):
@@ -41,28 +42,10 @@ class PartitionNode:
                            PartitionNodeSolvedReason.itself, 
                            make_time)
 
-    # def _update_status(self, status, reason, current_time):
     def update_status(self, status, reason, current_time):
         self.time_infos[status] = current_time
         self.status = status
         self.reason = reason
-    
-    # def set_unsat(self, reason, current_time):
-    #     self._update_status(PartitionNodeStatus.unsat,
-    #                        reason, current_time)
-    
-    # def set_sat(self, reason, current_time):
-    #     self._update_status(PartitionNodeStatus.sat,
-    #                        reason, current_time)
-    
-    def can_reason_unsat(self):
-        if len(self.children) == 0:
-            return False
-        for child in self.children:
-            child: PartitionNode
-            if not child.status.is_unsat():
-                return False
-        return True
     
     def __str__(self) -> str:
         pid = -1
@@ -78,17 +61,13 @@ class PartitionNode:
         return ret
 
 class PartitionTree:
+    root: None | PartitionNode
     nodes = []
+    result = PartitionNodeStatus.unsolved
+    
     def __init__(self, start_time):
-        # self.node_status_dict = {
-        #     # 'waiting': [],
-        #     # 'solving': [],
-        #     # 'ended': [],
-        # }
-        # self.proxy_functions = []
-        
         self.start_time = start_time
-        self.root: ParallelNode = self.make_node(None)
+        self.root = None
         
     def get_current_time(self):
         return time.time() - self.start_time
@@ -97,76 +76,21 @@ class PartitionTree:
         id = len(self.nodes)
         node = PartitionNode(id, parent, self.get_current_time())
         self.nodes.append(node)
+        if id == 0:
+            self.root = node
         return node
     
     def is_done(self):
-        return self.root.status.is_solved()
+        return self.result.is_solved()
     
     def get_result(self):
-        return self.root.status
+        return self.result
     
     def update_node_status(self, node: PartitionNode,
                            status: PartitionNodeStatus,
                            reason: PartitionNodeSolvedReason):
         current_time = self.get_current_time()
-        
         node.update_status(status, reason, current_time)
-        # if status == PartitionNodeStatus.unsat:
-        #     for func in self.proxy_functions:
-        #         func()
-        # if status > PartitionNodeStatus.ended:
-        #     status = PartitionNodeStatus.ended
-            
-    def unsat_push_up(self, node: PartitionNode):
-        if node.status.is_unsat():
-            return
-        if node.can_reason_unsat():
-            self.update_node_status(node, 
-                                    PartitionNodeStatus.unsat, 
-                                    PartitionNodeSolvedReason.children)
-            self.unsat_push_up(node.parent)
-    
-    def unsat_push_down(self, node: PartitionNode):
-        if node.status.is_unsat():
-            return
-        self.update_node_status(node, 
-                                PartitionNodeStatus.unsat,
-                                PartitionNodeSolvedReason.ancester)
-        for child in node.children:
-            self.unsat_push_down(child)
-    
-    def node_solved(self, 
-            node: PartitionNode, status: PartitionNodeStatus,
-            reason: PartitionNodeSolvedReason = PartitionNodeSolvedReason.itself):
-        self.update_node_status(node, status, reason)
-        if status.is_sat():
-            if node != self.root:
-                self.update_node_status(self.root, 
-                                        PartitionNodeStatus.sat, 
-                                        PartitionNodeSolvedReason.children)
-        elif status.is_unsat():
-            if node.parent != None:
-                self.unsat_push_up(node.parent)
-            self.unsat_push_up(node.parent)
-            if self.is_done():
-                return
-            for child in node.children:
-                self.unsat_push_down(child)
-            ### TBD ###
-            # if node.parent != None and \
-            #    not node.parent.status.is_unsat():
-            #     self.unsat_push_up(node.parent)
-            # if self.is_done():
-            #     return
-            # for child in node.children:
-            #     if not child.status.is_unsat():
-            #         self.unsat_push_down(child)
-        else:
-            assert(False)
-    
-    # ### TBD ### ParallelNodeStatus
-    # def node_id_solved(self, node_id: int, status: PartitionNodeStatus):
-    #     self.node_solved(self.nodes[node_id], status)
 
 # ParallelNodeStatus
 # waiting solving sat unsat unknown
@@ -186,6 +110,7 @@ class ParallelNodeStatus(PartitionNodeStatus):
 
 class ParallelNodeSolvedReason(PartitionNodeSolvedReason):
     partitioner = 10
+    split = 11
 
 class ParallelNode(PartitionNode):
     status: ParallelNodeStatus
@@ -196,32 +121,28 @@ class ParallelNode(PartitionNode):
         super().__init__(id, parent, make_time)
         ### TBD ###
     
+    def can_reason_unsat(self):
+        if len(self.children) == 0:
+            return False
+        for child in self.children:
+            child: ParallelNode
+            if not child.status.is_unsat():
+                return False
+        return True
+    
     def update_unsat_percentage(self):
         self.unsat_percentage = 0.0
         for child in self.children:
             child: ParallelNode
             self.unsat_percentage += child.unsat_percentage
-
+        self.unsat_percentage /= 2.0
 
 class ParallelTree(PartitionTree):
     solvings = []
     waitings = queue.Queue()
+    
     def __init__(self, start_time):
         super().__init__(start_time)
-        # self.node_status_dict = {
-        #     PartitionNodeStatus.unsolved: [],
-        #     PartitionNodeStatus.unsolved: [],
-        #     PartitionNodeStatus.unsolved: [],
-        #     PartitionNodeStatus.unsolved: [],
-        #     unsat_by_itself   = 1
-        #     unsat_by_ancester = 2
-        #     unsat_by_children = 3
-        #     sat = 4
-        #     error = 5
-        #     # 'waiting': [],
-        #     # 'solving': [],
-        #     # 'ended': [],
-        # }
     
     def get_next_waiting_node(self):
         while not self.waitings.empty():
@@ -230,97 +151,105 @@ class ParallelTree(PartitionTree):
                 return node
         return None
     
-    def set_node_split(self, node):
-        pass
-        
+    def set_node_split(self, node: ParallelNode, assigned_coord: int):
+        if node.assign_to != None:
+            node.assign_to.terminate()
+        node.assign_to = assigned_coord
+        self.node_solved_unsat(node, ParallelNodeSolvedReason.split)
+    
     def select_split_node(self):
-        pass
+        current: ParallelNode = self.root
+        while True:
+            if len(current.children) == 0:
+                break
+            assert(len(current.children) == 2)
+            lc: ParallelNode = current.children[0]
+            rc: ParallelNode = current.children[1]
+            assert((not lc.status.is_unsat()) or (not rc.status.is_unsat()))
+            if lc.status.is_unsat():
+                current = rc
+            elif rc.status.is_unsat():
+                current = lc
+            else:
+                return rc
+        return None
     
-    # if sta.is_sat():
-    #     self.result = ParallelNodeStatus.sat
-    #     # self.reason = t.id
-    #     self.write_line_to_log(f'sat-task {node.id}')
-    #     return False
-    # elif sta.is_unsat():
-    #     self.write_line_to_partitioner(f'unsat-node {node.id}')
-    #     self.tree.unsat_push_down()
-    #     if t.parent != None:
-    #         self.push_up(t.parent, t.id)
-    #     root_task: Task = self.tasks[0]
-    #     if root_task.status == 'unsat':
-    #         self.result = ParallelNodeStatus.unsat
-    #         self.reason = root_task.reason
-    #         self.write_line_to_log(f'unsat-root-task {root_task.reason}')
-    #         return False
-    #     for st in t.subtasks:
-    #         self.push_down(st, t.id)
-    # else:
-    #     assert(False)
-    # return False
+    def propagate_node_unsat(self,
+            node: ParallelNode,
+            reason: ParallelNodeSolvedReason):
+        self.update_node_status(node, 
+                                ParallelNodeStatus.unsat, 
+                                reason)
+        # self.write_line_to_partitioner(f'unsat-node {t.id}')
+        if node.assign_to != None:
+            node.assign_to.terminate()
+            node.assign_to = None
     
-    def solve_node(self, node: ParallelNode, p):
+    def unsat_push_up(self, node: ParallelNode):
+        if node.status.is_unsat():
+            return
+        if node.can_reason_unsat():
+            self.propagate_node_unsat(node, ParallelNodeSolvedReason.children)
+            if node.parent != None:
+                self.unsat_push_up(node.parent)
+    
+    def unsat_push_down(self, node: ParallelNode):
+        if node.status.is_unsat():
+            return
+        self.propagate_node_unsat(node, ParallelNodeSolvedReason.ancester)
+        for child in node.children:
+            self.unsat_push_down(child)
+    
+    def node_solved_unsat(self,
+            node: ParallelNode,
+            reason: ParallelNodeSolvedReason):
+        self.update_node_status(node,
+                ParallelNodeStatus.unsat,
+                reason)
+        # self.write_line_to_partitioner(f'unsat-node {t.id}')
+        if node.parent != None:
+            self.unsat_push_up(node.parent)
+        if self.root.status.is_unsat():
+            self.result = ParallelNodeStatus.unsat
+            return
+        for child in node.children:
+            self.unsat_push_down(child)
+    
+    def node_solved_sat(self,
+            node: ParallelNode,
+            reason: ParallelNodeSolvedReason):
+        self.update_node_status(node,
+                ParallelNodeStatus.sat,
+                reason)
+        self.result = ParallelNodeStatus.sat
+    
+    def node_solved(self, 
+            node: ParallelNode,
+            status: ParallelNodeStatus,
+            reason: ParallelNodeSolvedReason = ParallelNodeSolvedReason.itself):
+        if status.is_sat():
+            self.node_solved_sat(node, reason)
+        elif status.is_unsat():
+            self.node_solved_unsat(node, reason)
+        else:
+            assert(False)
+    
+    def assign_node(self, node: ParallelNode, p: subprocess.Popen):
         assert(node.assign_to == None)
         node.assign_to = p
         node.update_status(ParallelNodeStatus.solving,
                            ParallelNodeSolvedReason.itself,
                            self.get_current_time())
-        pass
-    
-    def node_solved(self, 
-            node: ParallelNode, status: ParallelNodeStatus,
-            reason: ParallelNodeSolvedReason = ParallelNodeSolvedReason.itself):
-        super().node_solved()
-        
-    
-    def get_path(self, node: ParallelNode):
-        ret = []
-        current = node
-        while True:
-            if current.parent == None:
-                break
-            assert(isinstance(current.parent, ParallelNode))
-            ret.append(current.parent.children.index(current))            
-            current = current.parent
-        ret.reverse()
-        return ret
-    
-    # def make_task(self, id, pid, is_unsat):
-    #     parent: Task = None
-    #     if (pid != -1):
-    #         parent = self.id2task[pid]
-    #     t = Task(None, id, parent, self.get_current_time())
-        
-    #     if is_unsat:
-    #         self.update_task_status(t, 'unsat')
-    #         t.reason = -1
-    #         if parent != None:
-    #             self.push_up(parent, t.id)
-    #     else:
-    #         self.update_task_status(t, 'waiting')
-        
-    #     if parent != None:
-    #         if t.status != 'unsat' and parent.status == 'unsat':
-    #             self.propagate_unsat(t, parent.reason)
-    #         parent.subtasks.append(t)
-        
-    #     # self.write_line_to_log(f'make-task {t}')
-        
-    #     self.id2task[id] = t
-    #     self.tasks.append(t)
-    #     ### TBD ###
-    #     pass
-        
     
 class DistributedNodeStatus(PartitionNodeStatus):
     pass
 
-class DistributedNodeSolvedReason(Enum):
+class DistributedNodeSolvedReason(PartitionNodeSolvedReason):
     # by
     original = 10
 
 class DistributedNode(PartitionNode):
-    dependency_children = []
-    dependency_parent = None
+    partial_status = DistributedNodeStatus.unsolved
     def __init__(self, id, parent, make_time):
         super().__init__(id, parent, make_time)
         ### TBD ###
@@ -328,26 +257,60 @@ class DistributedNode(PartitionNode):
     def update_status(self, status, reason, current_time):
         super().update_status(status, reason, current_time)
         ### TBD ###
+    
+    def update_partial_status(self, partial_status):
+        self.partial_status = partial_status
+    
+    def can_reason_unsat(self):
+        if not self.partial_status.is_unsat():
+            return False
+        for child in self.children:
+            child: DistributedNode
+            if not child.status.is_unsat():
+                return False
+        return True
 
 class DistributedTree(PartitionTree):
     def __init__(self, start_time):
         super().__init__(start_time)
     
-    def assign_node(self, node: DistributedNode, coordinator_id: int):
-        node.assign_to = coordinator_id
+    def unsat_push_up(self, node: DistributedNode):
+        assert(not node.status.is_unsat())
+        if node.can_reason_unsat():
+            self.update_node_status(node, 
+                DistributedNodeStatus.unsat, 
+                DistributedNodeSolvedReason.itself)
+            if node.parent != None:
+                self.unsat_push_up(node.parent)
     
-    def select_split_node(self):
-        ### TBD ###
-        pass
+    def node_partial_solved_unsat(self,
+            node: DistributedNode):
+        node.update_partial_status(DistributedNodeStatus.unsat)
+        self.unsat_push_up(node)
+        if self.root.status.is_unsat():
+            self.result = DistributedNodeStatus.unsat
+            return
     
-    def update_with_path(self, relative_root: DistributedNode, path: list, coordinator_id: int):
-        current = relative_root
-        for index in path:
-            if len(current.children) == 0:
-                current.children.append(self.make_node(current))
-                current.children.append(self.make_node(current))
-            current = current.children[index]
-            
-        self.assign_node(current, coordinator_id)
-        return current
+    def node_partial_solved_sat(self,
+            node: DistributedNode):
+        node.update_partial_status(DistributedNodeStatus.sat)
+        self.result = DistributedNodeStatus.sat
+    
+    def node_partial_solved(self, 
+            node: DistributedNode,
+            status: DistributedNodeStatus):
+        if status.is_sat():
+            self.node_partial_solved_sat(node)
+        elif status.is_unsat():
+            self.node_partial_solved_unsat(node)
+        else:
+            assert(False)
+    
+    # split node from {parent} to {coord_id}
+    def split_node_from(self, parent: DistributedNode, coord_id: int):
+        ret = self.make_node(parent)
+        parent.children.append(ret)
+        ret.assign_to = coord_id
+        return ret
+    
     

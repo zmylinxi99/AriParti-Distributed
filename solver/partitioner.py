@@ -1,6 +1,7 @@
 import select
 import subprocess
 from enum import Enum
+from control_message import ControlMessage
 
 class PartitionerStatus(Enum):
     running = 0
@@ -39,12 +40,12 @@ class Partitioner:
     def is_running(self):
         return self.status.is_running()
     
-    def set_status(self, result: str):
-        if result == 'sat':
+    def set_status(self, result: ControlMessage.P2C):
+        if result.is_sat():
             self.status = PartitionerStatus.sat
-        elif result == 'unsat':
+        elif result.is_unsat():
             self.status = PartitionerStatus.unsat
-        elif result == 'unknown':
+        elif result.is_unknown():
             self.status = PartitionerStatus.unknown
         else:
             assert(False)

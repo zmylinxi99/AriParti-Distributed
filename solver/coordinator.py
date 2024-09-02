@@ -10,6 +10,7 @@ from enum import Enum
 from partition_tree import ParallelTree
 from partition_tree import ParallelNode
 from partition_tree import ParallelNodeStatus
+from partition_tree import PartitionNodeStatus
 from partition_tree import ParallelNodeSolvedReason
 
 from control_message import ControlMessage
@@ -89,11 +90,11 @@ class Coordinator():
     
     def process_partitioner_msg(self, msg: str):
         words = msg.split(' ')
-        op = words[1]
-        if op == 'debug-info':
+        op = ControlMessage.P2C(int(words[1]))
+        if op.is_debug_info():
             remains = " ".join(words[2: ])
             self.write_line_to_log(f'partitioner-debug-info {remains}')
-        elif op in ['new-task', 'unsat-task']:
+        elif op.is_new_node():
             id = int(words[2])
             pid = int(words[3])
             if pid == -1:
@@ -101,11 +102,12 @@ class Coordinator():
             else:
                 parent = self.tree.nodes[pid]
             node = self.tree.make_node(parent)
-            if op == 'unsat-task':
+            assert(node.id == id)
+            if op.is_unsat_node():
                 self.tree.node_solved(node, ParallelNodeStatus.unsat, 
                                       ParallelNodeSolvedReason.partitioner)
             ### TBD ###
-        elif op in ['sat', 'unsat', 'unknown']:
+        elif op.is_solved_result():
             ### TBD ###
             assert(len(words) == 1)
             self.partitioner.set_status(op)
@@ -186,7 +188,7 @@ class Coordinator():
                 stderr=subprocess.PIPE,
                 text=True
             )
-        self.tree.solve_node(node, p)
+        self.tree.assign_node(node, p)
         
         self.write_line_to_log(f'solve-node {node.id}')
     
@@ -228,7 +230,7 @@ class Coordinator():
     # can be easily change to: priority select
     def run_waiting_tasks(self):
         ### TBD ###
-        while self.tree.running_nodes_number() < self.available_cores:
+        while len(self.tree.solvings) < self.available_cores:
             node = self.tree.get_next_waiting_node()
             if node == None:
                 break
@@ -253,7 +255,7 @@ class Coordinator():
         self.partitioner = Partitioner(p)
     
     def terminate_partitioner(self):
-        if self.partitioner.status == 'solving':
+        if self.partitioner.status.is_running():
             self.partitioner.p.terminate()
     
     def start_solving(self):
@@ -285,7 +287,7 @@ class Coordinator():
 
     # coordinator [rank] solved the assigned node
     def send_result_to_leader(self):
-        result: ParallelNodeStatus = self.get_result()
+        result: PartitionNodeStatus = self.get_result()
         assert(result.is_solved())
         
         MPI.COMM_WORLD.send(ControlMessage.C2L.notify_result,
@@ -308,13 +310,11 @@ class Coordinator():
         return False
     
     def select_split_node(self):
-        ### TBD ###
         return self.tree.select_split_node()
 
-    def set_node_split(self, node: ParallelNode):
+    def set_node_split(self, node: ParallelNode, assigned_coord: int):
         ### TBD ###
-        self.tree.set_node_split(node)
-    
+        self.tree.set_node_split(node, assigned_coord)
     
     def clean_up(self):
         if self.partitioner.p != None:
@@ -352,10 +352,10 @@ class Coordinator():
         self.receive_node_from_coordinator(coordinator_rank)
         self.start_solving()
     
-    def send_node_path_to_leader(self, path, target_rank):
-        MPI.COMM_WORLD.send(ControlMessage.C2L.send_path,
+    def send_split_succeed_to_leader(self, target_rank):
+        MPI.COMM_WORLD.send(ControlMessage.C2L.split_succeed,
                             dest=self.leader_rank, tag=1)
-        MPI.COMM_WORLD.send((path, target_rank), 
+        MPI.COMM_WORLD.send(target_rank, 
                             dest=self.leader_rank, tag=2)
     
     def send_instance_to_coordinator(self, instance_data, target_rank):
@@ -364,25 +364,30 @@ class Coordinator():
         MPI.COMM_WORLD.send(instance_data, 
                             dest=target_rank, tag=2)
     
+    def send_split_failed_to_leader(self, target_rank):
+        MPI.COMM_WORLD.send(ControlMessage.C2L.split_failed,
+                            dest=self.leader_rank, tag=1)
+        MPI.COMM_WORLD.send(target_rank, 
+                            dest=self.leader_rank, tag=2)
+    
     def process_split_message(self):
         # split a subnode and assign to coordinator {target_rank}
-        node: ParallelNode = self.select_split_node()
-        self.set_node_split(node)
-        path = self.tree.get_path(node)
+        node = self.select_split_node()
         target_rank = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=2)
-
-        self.send_node_path_to_leader(path, target_rank)
-        
+        if node == None:
+            self.send_split_failed_to_leader(target_rank)
+            return
+        self.send_split_succeed_to_leader(target_rank)
+        node: ParallelNode
+        self.set_node_split(node, target_rank)
         instance_path = f'{self.solving_folder_path}/task-{node.id}.smt2'
         with open(instance_path, 'br') as file:
             instance_data = file.read()
-        
         self.send_instance_to_coordinator(instance_data, target_rank)
-    
+
     def __call__(self):
         if self.rank == 0:
             self.solve_leader_root()
-        
         while True:
             if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
                 msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
@@ -399,7 +404,6 @@ class Coordinator():
                     break
                 else:
                     assert(False)
-            
             if self.status.is_solving():
                 if self.parallel_solving():
                     break
@@ -408,7 +412,6 @@ class Coordinator():
             #     or (not self.need_communicate):
             #     time.sleep(0.1)
             time.sleep(0.1)
-            
         self.clean_up()
         
 if __name__ == '__main__':
