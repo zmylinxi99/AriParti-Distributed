@@ -622,10 +622,11 @@ private:
     unsigned            m_max_running_tasks;
     unsigned            m_max_alive_tasks;
     
-    std::ifstream       m_read_pipe;
-    std::ofstream       m_write_pipe;
+    char *              m_read_buffer;
+    unsigned            m_read_buffer_head;
+    unsigned            m_read_buffer_tail;
+    std::string         m_current_line;
     std::stringstream   m_temp_stringstream;
-    unsigned            m_curr_line_time;
     
     clock_t             m_start_time;
 
@@ -912,7 +913,7 @@ private:
     
     void write_debug_line_to_master(const std::string & data);
 
-    bool read_line_from_master(std::string & line);
+    bool read_line_from_master();
 
     void parse_line(const std::string & line);
 

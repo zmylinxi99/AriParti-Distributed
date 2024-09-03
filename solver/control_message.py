@@ -55,13 +55,20 @@ class ControlMessage:
         
     # Coordinator To Partitioner
     class C2P(Enum):
-        pass
+        unsat_node = 0
+        terminate_node = 1
+        
+        def is_unsat_node(self):
+            return self == ControlMessage.C2P.unsat_node
+        
+        def is_terminate_node(self):
+            return self == ControlMessage.C2P.terminate_node
     
     # Partitioner To Coordinator
     class P2C(Enum):
         debug_info = 0
-        unknown_node = 1
-        unsat_node = 2
+        new_unknown_node = 1
+        new_unsat_node = 2
         sat = 3
         unsat = 4
         unknown = 5
@@ -69,11 +76,11 @@ class ControlMessage:
         def is_debug_info(self):
             return self == ControlMessage.P2C.debug_info
         
-        def is_unknown_node(self):
-            return self == ControlMessage.P2C.unknown_node
+        def is_new_unknown_node(self):
+            return self == ControlMessage.P2C.new_unknown_node
         
-        def is_unsat_node(self):
-            return self == ControlMessage.P2C.unsat_node
+        def is_new_unsat_node(self):
+            return self == ControlMessage.P2C.new_unsat_node
         
         def is_sat(self):
             return self == ControlMessage.P2C.sat
@@ -85,7 +92,7 @@ class ControlMessage:
             return self == ControlMessage.P2C.unknown
         
         def is_new_node(self):
-            return self.is_unknown_node() or self.is_unsat_node()
+            return self.is_new_unknown_node() or self.is_new_unsat_node()
         
         def is_solved_result(self):
             return self.is_sat() or self.is_unsat() or self.is_unknown()

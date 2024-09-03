@@ -48,6 +48,22 @@ struct task_info {
     }
 };
 
+struct control_message {
+    enum P2C {
+        debug_info = 0,
+        new_unknown_node = 1,
+        new_unsat_node = 2,
+        sat = 3,
+        unsat = 4,
+        unknown = 5
+    };
+
+    enum C2P {
+        unsat_node = 0,
+        terminate_node = 1
+    };
+};
+
 typedef unsigned var;
 
 const var null_var = UINT_MAX;

@@ -51,8 +51,8 @@ if __name__ == '__main__':
     # formula_logic = get_logic(formula_file)
     # base_solver = select_solver_for_logic(formula_logic)
     
-    base_solver = 'z3pp-at-smt-comp-2023-bin'
-    
+    # base_solver = 'z3pp-at-smt-comp-2023-bin'
+    base_solver = 'z3-4.12.1-bin'
     output_dir = request_directory
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
@@ -118,24 +118,26 @@ if __name__ == '__main__':
         '--allow-run-as-root',
         '--use-hwthread-cpus',
         '--bind-to none', '--report-bindings',
-        f'--rankfile {output_dir}/rankfile'
+        f'--rankfile {output_dir}/rankfile',
+        f'python3 {script_dir}/dummy.py'
     ]
     
+    cmd = ' '.join(cmd_paras)
     # ##//linxi-test
-    # print(f"command:\n{cmd_paras}")
+    print(f"command:\n{cmd}")
     
     result = subprocess.run(
-        cmd_paras,
+        cmd,
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
     
     # ##//linxi-test
-    # print(f'stdout:')
-    # print(result.stdout.decode("utf-8"))
-    # print(f'stderr:')
-    # print(result.stderr.decode("utf-8"))
+    print(f'stdout:')
+    print(result.stdout.decode("utf-8"))
+    print(f'stderr:')
+    print(result.stderr.decode("utf-8"))
     
     sys.stdout.write(result.stdout.decode("utf-8"))
     # sys.stderr.write(result.stderr.decode("utf-8"))

@@ -48,13 +48,13 @@ class Coordinator():
     def init_params(self):
         arg_parser = argparse.ArgumentParser()
         arg_parser.add_argument('--partitioner', type=str, required=True,
-                                help="partitioner path")
+                                help='partitioner path')
         arg_parser.add_argument('--solver', type=str, required=True,
-                                help="solver path")
+                                help='solver path')
         arg_parser.add_argument('--temp-dir', type=str, required=True, 
                                 help='temp dir path')
         arg_parser.add_argument('--available-cores', type=int, required=True, 
-                                help="available cores in this equipment")
+                                help='available cores in this equipment')
         cmd_args = arg_parser.parse_args()
         self.partitioner_path: str = cmd_args.partitioner
         self.solver_path: str = cmd_args.solver
@@ -79,7 +79,7 @@ class Coordinator():
         #             filename=f'{self.output_dir_path}/log', level=logging.INFO)
         # self.start_time = time.time()
         # current_time = datetime.now()
-        # formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        # formatted_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
         # self.write_line_to_log(f'start-time {formatted_time} ({self.start_time})')
         ### TBD ###
         pass
@@ -90,20 +90,20 @@ class Coordinator():
     
     def process_partitioner_msg(self, msg: str):
         words = msg.split(' ')
-        op = ControlMessage.P2C(int(words[1]))
+        op = ControlMessage.P2C(int(words[0]))
         if op.is_debug_info():
-            remains = " ".join(words[2: ])
+            remains = ' '.join(words[1: ])
             self.write_line_to_log(f'partitioner-debug-info {remains}')
         elif op.is_new_node():
-            id = int(words[2])
-            pid = int(words[3])
+            id = int(words[1])
+            pid = int(words[2])
             if pid == -1:
                 parent = None
             else:
                 parent = self.tree.nodes[pid]
             node = self.tree.make_node(parent)
             assert(node.id == id)
-            if op.is_unsat_node():
+            if op.is_new_unsat_node():
                 self.tree.node_solved(node, ParallelNodeStatus.unsat, 
                                       ParallelNodeSolvedReason.partitioner)
             ### TBD ###
@@ -241,8 +241,8 @@ class Coordinator():
     def run_partitioner(self):
         cmd =  [self.partitioner_path,
                 f'{self.solving_folder_path}/task-root.smt2',
-                f"-outputdir:{self.solving_folder_path}",
-                f"-partmrt:{self.available_cores}"
+                f'-outputdir:{self.solving_folder_path}',
+                f'-partmrt:{self.available_cores}'
             ]
         self.write_line_to_log(f'exec-command {" ".join(cmd)}')
         p = subprocess.Popen(

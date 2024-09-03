@@ -27,6 +27,10 @@ Revision History:
 #include <memory>
 #include <thread>
 
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+
 namespace subpaving {
 
 /**
@@ -1957,9 +1961,8 @@ void context_t<C>::assert_units(node * n) {
 }
 
 template<typename C>
-void context_t<C>::write_line_to_master(const std::string & data) {
-    m_curr_line_time = static_cast<unsigned>(std::time(nullptr) - m_start_time);
-    m_write_pipe << m_curr_line_time << " " << data << std::endl;
+void context_t<C>::write_line_to_master(const std::string & line) {
+    std::cout << line << std::endl;
 }
 
 template<typename C>
@@ -1970,26 +1973,43 @@ void context_t<C>::write_ss_line_to_master() {
 }
 
 template<typename C>
-void context_t<C>::write_debug_line_to_master(const std::string & data) {
-    m_curr_line_time = static_cast<unsigned>(std::time(nullptr) - m_start_time);
-    m_write_pipe << m_curr_line_time << " debug-info " << data << std::endl;
+void context_t<C>::write_debug_line_to_master(const std::string & line) {
+    std::cout << control_message::P2C::debug_info << " " << line << std::endl;
 }
 
 template<typename C>
-bool context_t<C>::read_line_from_master(std::string & line) {
-    if (std::getline(m_read_pipe, line)) {
-        return true;
+bool context_t<C>::read_line_from_master() {
+    if (m_read_buffer_head >= m_read_buffer_tail) {
+        ssize_t n = read(STDIN_FILENO, m_read_buffer, sizeof(m_read_buffer) - 1);
+        if (n > 0) {
+            m_read_buffer_head = 0;
+            m_read_buffer_tail = static_cast<unsigned>(n);
+        } else if (n < 0 && errno != EAGAIN) {
+            std::cerr << "Error reading input" << std::endl;
+            UNREACHABLE();
+        }
+    }
+    
+    while (m_read_buffer_head < m_read_buffer_tail) {
+        char ch = m_read_buffer[m_read_buffer_head++];
+        if (ch == '\n') {
+            return true;
+        }
+        else {
+            m_current_line.push_back(ch);
+        }
     }
     return false;
 }
 
 template<typename C>
 void context_t<C>::init_communication() {
-    m_read_pipe.open(m_output_dir + "/master-to-partitioner");
-    m_write_pipe.open(m_output_dir + "/partitioner-to-master");
-    if (m_read_pipe.eof())
-        m_read_pipe.clear();
-    read_parse_line();
+    int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+    
+    m_read_buffer = new char[1024];
+    m_read_buffer_head = 0;
+    m_read_buffer_tail = 0;
 }
 
 template<typename C>
@@ -2020,6 +2040,7 @@ void context_t<C>::init_partition() {
     nm().set(m_split_delta, 128);
     nm().set(m_unbounded_penalty, 1024);
     nm().set(m_unbounded_penalty_sq, 1024 * 1024);
+
     init_communication();
 }
 
@@ -2423,17 +2444,10 @@ void context_t<C>::select_best_var(node * n) {
 template<typename C>
 void context_t<C>::parse_line(const std::string & line) {
     std::stringstream ss(line);
-    std::string word;
-    ss >> m_curr_line_time >> word;
-    if (word == "start-time") {
-        ss >> m_start_time;
-        m_temp_stringstream << "debug-info get start-time = " << m_start_time;
-        write_ss_line_to_master();
-    }
-    else if (word == "debug-info") {
-        // do nothing
-    }
-    else if (word == "unsat-node") {
+    int op_id;
+    ss >> op_id;
+    control_message::C2P op = control_message::C2P(op_id);
+    if (op == control_message::C2P::unsat_node) {
         unsigned id;
         ss >> id;
         if (m_nodes_state[id] == node_state::WAITING) {
@@ -2441,8 +2455,7 @@ void context_t<C>::parse_line(const std::string & line) {
             --m_alive_task_num;
         }
     }
-    else if (word == "unknown-node" ||
-             word == "terminate-node") {
+    else if (op == control_message::C2P::terminate_node) {
         unsigned id;
         ss >> id;
         if (m_nodes_state[id] == node_state::WAITING) {
@@ -2457,17 +2470,16 @@ void context_t<C>::parse_line(const std::string & line) {
 
 template<typename C>
 bool context_t<C>::read_parse_line() {
-    std::string line;
-    if (!read_line_from_master(line))
+    if (!read_line_from_master())
         return false;
-    parse_line(line);
+    parse_line(m_current_line);
+    m_current_line = "";
+    // m_current_line.clear();
     return true;
 }
 
 template<typename C>
 void context_t<C>::communicate_with_master() {
-    if (m_read_pipe.eof())
-        m_read_pipe.clear();
     while (read_parse_line()) {
         // do nothing
     }
@@ -2594,7 +2606,8 @@ void context_t<C>::split_node(node * n) {
     propagate(left);
     if (left->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << left->id() << " is inconsistent.\n";);
-        m_temp_stringstream << "unsat-task " << left->id() << " " << n->id();
+        m_temp_stringstream << control_message::P2C::new_unsat_node << " " 
+                            << left->id() << " " << n->id();
         write_ss_line_to_master();
         m_nodes_state[left->id()] = node_state::UNSAT;
     }
@@ -2603,7 +2616,8 @@ void context_t<C>::split_node(node * n) {
     propagate(right);
     if (right->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << right->id() << " is inconsistent.\n";);
-        m_temp_stringstream << "unsat-task " << right->id() << " " << n->id();
+        m_temp_stringstream << control_message::P2C::new_unsat_node << " "
+                            << right->id() << " " << n->id();
         write_ss_line_to_master();
         m_nodes_state[right->id()] = node_state::UNSAT;
     }
@@ -2664,7 +2678,7 @@ lbool context_t<C>::operator()() {
         int pid = -1;
         if (pa != nullptr)
             pid = static_cast<int>(pa->id());
-        m_temp_stringstream << "new-task " << m_ptask->m_node_id << " " << pid;
+        m_temp_stringstream << control_message::P2C::new_unknown_node << " " << m_ptask->m_node_id << " " << pid;
         write_ss_line_to_master();
         m_ptask->reset();
     }
