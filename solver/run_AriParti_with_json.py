@@ -8,6 +8,8 @@ import random
 import subprocess
 import multiprocessing
 
+# import shutil
+
 def generate_random_string(length):
     characters = string.ascii_letters + string.digits
     return ''.join(random.choice(characters) for _ in range(length))
@@ -46,13 +48,14 @@ if __name__ == '__main__':
     formula_file = config_data['formula_file']
     timeout_seconds: int = config_data['timeout_seconds']
     worker_node_ips = config_data['worker_node_ips']
-    worker_node_cores = config_data.get('worker_node_cores', None)
+    worker_node_cores = config_data.get('worker_node_cores')
     
     # formula_logic = get_logic(formula_file)
     # base_solver = select_solver_for_logic(formula_logic)
-    
     # base_solver = 'z3pp-at-smt-comp-2023-bin'
-    base_solver = 'z3-4.12.1-bin'
+    # base_solver = 'z3-4.12.1-bin'
+    base_solver = 'cvc5-1.0.8-bin'
+    
     output_dir = request_directory
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
@@ -63,8 +66,11 @@ if __name__ == '__main__':
     node_number = len(worker_node_ips)
     host_core_number = multiprocessing.cpu_count()
 
-    
     os.makedirs(output_dir, exist_ok=True)
+    
+    # logs_dir = f'{output_dir}/logs'
+    # if os.path.exists(logs_dir):
+    #     shutil.rmtree(logs_dir)
 
     temp_folder_name = generate_random_string(16)
     
@@ -73,7 +79,6 @@ if __name__ == '__main__':
     # print(temp_folder_name)
     
     temp_folder_path = f'/tmp/ap-files/{temp_folder_name}'
-    
     os.makedirs(temp_folder_path, exist_ok=True)
     
     # ##//linxi-test
@@ -81,34 +86,14 @@ if __name__ == '__main__':
     
     # solving_time_limit = timeout_seconds - 10
     solving_time_limit = timeout_seconds
-
-    leader_cmd_paras = [
-        f'python3 {script_dir}/leader.py',
-        f'--file {formula_file}',
-        f'--output-dir {output_dir}',
-        f'--temp-dir {temp_folder_path}',
-        f'--time-limit {solving_time_limit}'
-    ]
-    leader_cmd = ' '.join(leader_cmd_paras)
-    
-    coordinator_cmd_paras = [
-        f'python3 {script_dir}/coordinator.py',
-        f'--temp-dir {temp_folder_path}',
-        r'--available-cores {}',
-        f'--partitioner {script_dir}/binary-files/partitioner-bin',
-        f'--solver {script_dir}/binary-files/{base_solver}',
-    ]
-    coordinator_cmd = ' '.join(coordinator_cmd_paras)
     
     with open(f'{output_dir}/rankfile', 'w') as rfile:
-        rfile.write(f'rank 0={worker_node_ips[0]} slot=0 {coordinator_cmd.format(worker_node_cores[0] - 2)}\n')
-        for i in range(1, node_number):
+        for i in range(node_number):
             node_ip = worker_node_ips[i]
-            node_core = worker_node_cores[i]
-            rfile.write(f'rank {i}={node_ip} slot=0 {coordinator_cmd.format(node_core)}\n')
-        rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=1 {leader_cmd}\n')
+            rfile.write(f'rank {i}={node_ip} slot=0\n')
             # ##//linxi-test
             # print(f'{node_ip} slots={slot}\n')
+        rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=1\n')
     
     cmd_paras = [
         'mpiexec',
@@ -119,8 +104,22 @@ if __name__ == '__main__':
         '--use-hwthread-cpus',
         '--bind-to none', '--report-bindings',
         f'--rankfile {output_dir}/rankfile',
-        f'python3 {script_dir}/dummy.py'
     ]
+    
+    cmd_paras.extend([
+        f'python3 {script_dir}/AriParti.py',
+        # leader parameters
+        f'--file {formula_file}',
+        f'--output-dir {output_dir}',
+        f'--temp-dir {temp_folder_path}',
+        f'--time-limit {solving_time_limit}',
+        # coordinator parameters
+        # f'--temp-dir {temp_folder_path}',
+        f'--available-cores-list "{json.dumps(worker_node_cores)}"',
+        # f'--partitioner {script_dir}/binary-files/partitioner-bin',
+        f'--partitioner {script_dir}/partitioner/build/z3',
+        f'--solver {script_dir}/binary-files/{base_solver}',
+    ])
     
     cmd = ' '.join(cmd_paras)
     # ##//linxi-test

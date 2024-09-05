@@ -2035,6 +2035,8 @@ void context_t<C>::init_partition() {
 
     const params_ref &p = gparams::get_ref();
     m_output_dir = p.get_str("output_dir", "ERROR");
+    SASSERT(m_output_dir != "ERROR");
+    write_debug_line_to_master("output dir: " + m_output_dir);
     m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
     m_max_alive_tasks = static_cast<unsigned>(m_max_running_tasks * 1.5);
     nm().set(m_split_delta, 128);
@@ -2472,6 +2474,7 @@ template<typename C>
 bool context_t<C>::read_parse_line() {
     if (!read_line_from_master())
         return false;
+    write_debug_line_to_master("read line from master: " + m_current_line);
     parse_line(m_current_line);
     m_current_line = "";
     // m_current_line.clear();
@@ -2606,8 +2609,8 @@ void context_t<C>::split_node(node * n) {
     propagate(left);
     if (left->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << left->id() << " is inconsistent.\n";);
-        m_temp_stringstream << control_message::P2C::new_unsat_node << " " 
-                            << left->id() << " " << n->id();
+        m_temp_stringstream << control_message::P2C::new_unsat_node 
+                            << " " << left->id() << " " << n->id();
         write_ss_line_to_master();
         m_nodes_state[left->id()] = node_state::UNSAT;
     }
@@ -2616,8 +2619,8 @@ void context_t<C>::split_node(node * n) {
     propagate(right);
     if (right->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << right->id() << " is inconsistent.\n";);
-        m_temp_stringstream << control_message::P2C::new_unsat_node << " "
-                            << right->id() << " " << n->id();
+        m_temp_stringstream << control_message::P2C::new_unsat_node 
+                            << " " << right->id() << " " << n->id();
         write_ss_line_to_master();
         m_nodes_state[right->id()] = node_state::UNSAT;
     }
@@ -2678,7 +2681,8 @@ lbool context_t<C>::operator()() {
         int pid = -1;
         if (pa != nullptr)
             pid = static_cast<int>(pa->id());
-        m_temp_stringstream << control_message::P2C::new_unknown_node << " " << m_ptask->m_node_id << " " << pid;
+        m_temp_stringstream << control_message::P2C::new_unknown_node 
+                            << " " << m_ptask->m_node_id << " " << pid;
         write_ss_line_to_master();
         m_ptask->reset();
     }

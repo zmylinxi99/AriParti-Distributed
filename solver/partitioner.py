@@ -1,17 +1,22 @@
 import select
 import subprocess
 from enum import Enum
+from enum import auto
 from control_message import ControlMessage
 
 class PartitionerStatus(Enum):
-    running = 0
-    sat = 1
-    unsat = 2
-    unknown = 3
-    error = 4
+    running = auto()
+    wait_result = auto()
+    sat = auto()
+    unsat = auto()
+    unknown = auto()
+    error = auto()
     
     def is_running(self):
         return self == PartitionerStatus.running
+    
+    def is_wait_result(self):
+        return self == PartitionerStatus.wait_result
     
     def is_sat(self):
         return self == PartitionerStatus.sat
@@ -21,13 +26,28 @@ class PartitionerStatus(Enum):
     
     def is_unknown(self):
         return self == PartitionerStatus.unknown
+    
+    def is_done(self):
+        return self.is_sat() or self.is_unsat() or self.is_unknown()
 
 class Partitioner:
     def __init__(self, p: subprocess.Popen):
-        self.p: subprocess.Popen = p
         self.status = PartitionerStatus.running
-        
+        self.p: subprocess.Popen = p
+    
+    def is_running(self):
+        if not self.status.is_running():
+            return False
+        rc = self.p.poll()
+        if rc == None:
+            return True
+        assert(rc == 0)
+        self.status = PartitionerStatus.wait_result
+        return False
+    
     def send_message(self, msg: str):
+        if not self.is_running():
+            return
         self.p.stdin.write(msg + '\n')
         self.p.stdin.flush()
     
@@ -40,12 +60,12 @@ class Partitioner:
     def is_running(self):
         return self.status.is_running()
     
-    def set_status(self, result: ControlMessage.P2C):
-        if result.is_sat():
+    def set_status(self, result: str):
+        if result == 'sat':
             self.status = PartitionerStatus.sat
-        elif result.is_unsat():
+        elif result == 'unsat':
             self.status = PartitionerStatus.unsat
-        elif result.is_unknown():
+        elif result == 'unknown':
             self.status = PartitionerStatus.unknown
         else:
             assert(False)

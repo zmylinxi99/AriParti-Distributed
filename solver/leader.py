@@ -1,43 +1,52 @@
 import os
 import shutil
 import time
-import queue
 import logging
 import argparse
 import subprocess
-from datetime import datetime
 from mpi4py import MPI
+from datetime import datetime
+import heapq
+from collections import deque
 from partition_tree import DistributedNode
 from partition_tree import DistributedTree
-from partition_tree import DistributedNodeStatus
-from partition_tree import DistributedNodeSolvedReason
+from partition_tree import NodeStatus
+from partition_tree import NodeSolvedReason
 from control_message import ControlMessage
 
 class CoordinatorInfo:
-    assign_to = None
-    last_solving = 0.0
-    last_split = 0.0
-    solving_round = 0
-    split_count = 0
-    
-    def __init__(self, rank):
+    def __init__(self, rank, start_time):
+        self.assigned = None
+        self.solving_round = 0
+        self.split_count = 0
+        self.last_split = 0.0
+        self.last_assign = 0.0
+        
         self.rank = rank
+        self.start_time = start_time
+        
+    def get_current_time(self):
+        return time.time() - self.start_time
     
-    def assign_node(self, node: DistributedNode, current_time):
-        self.assign_to = node
-        self.last_solving = current_time
-        self.last_split = current_time
+    def assign_node(self, node: DistributedNode):
+        self.assigned = node
         self.solving_round += 1
         self.split_count = 0
+        self.last_assign = self.get_current_time()
+        self.last_split = self.get_current_time()
         
-    def split_node(self, current_time):
-        self.last_split = current_time
+    def split_node(self):
         self.split_count += 1
+        self.last_split = self.get_current_time()
+        
+    def node_solved(self):
+        self.assigned = None
 
 class Leader:
     def __init__(self):
-        self.solve_original_flag = True
+        self.solve_original_flag = False
         # self.solve_original_flag = False
+        self.split_tabu = 1.0
         
         self.leader_rank = MPI.COMM_WORLD.Get_rank()
         self.num_nodes = self.leader_rank
@@ -51,41 +60,49 @@ class Leader:
         
         # ##//linxi debug
         # print(self.temp_folder_path)
-        # print(f'{self.output_dir_path}/log')
+        # print(f'{self.output_folder_path}/log')
         
-        if self.output_dir_path != None:
-            os.makedirs(self.output_dir_path, exist_ok=True)
+        os.makedirs(self.output_folder_path, exist_ok=True)
         
         self.init_logging()
-        logging.info(f'temp_folder_path: {self.temp_folder_path}')
         
-        self.idle_coordinators = queue.Queue(range(self.num_nodes))
+        logging.debug(f'num_nodes: {self.num_nodes}')
+        logging.debug(f'leader_rank: {self.leader_rank}')
+        logging.debug(f'temp_folder_path: {self.temp_folder_path}')
+        
+        self.idle_coordinators = deque([i for i in range(1, self.num_nodes)])
         self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_nodes)]
-        self.split_candidate = queue.Queue()
-        
-        # self.split_target = [-1 for i in range(self.num_nodes)]
-        self.split_stamp = 0.0
-        
+        self.split_candidate = deque()
+        logging.debug(f'init done!')
     
     def init_params(self):    
         arg_parser = argparse.ArgumentParser()
-        arg_parser.add_argument('--file', type=str, required=True,
-                                help='input instance file path')
-        arg_parser.add_argument('--solver', type=str, required=True,
-                                help="solver path")
-        arg_parser.add_argument('--temp-dir', type=str, required=True,
+        common_args = arg_parser.add_argument_group('Common Arguments')
+        common_args.add_argument('--temp-dir', type=str, required=True,
                                 help='temp dir path')
-        arg_parser.add_argument('--time-limit', type=int, default=0,
-                                help='time limit, 0 means no limit')
-        arg_parser.add_argument('--output-dir', type=str, default=None,
+        common_args.add_argument('--solver', type=str, required=True,
+                                help="solver path")
+        common_args.add_argument('--output-dir', type=str, required=True,
                                 help='output dir path')
-        cmd_args = arg_parser.parse_args()
         
+        leader_args = arg_parser.add_argument_group('Leader Arguments')
+        leader_args.add_argument('--file', type=str, required=True,
+                        help='input instance file path')
+        leader_args.add_argument('--time-limit', type=int, default=0,
+                                help='time limit, 0 means no limit')
+        
+        coordinator_args = arg_parser.add_argument_group('Coordinator Arguments')
+        coordinator_args.add_argument('--partitioner', type=str, required=True,
+                                help='partitioner path')
+        coordinator_args.add_argument('--available-cores-list', type=str, required=True, 
+                                help='available cores list')
+        
+        cmd_args = arg_parser.parse_args()
         self.input_file_path: str = cmd_args.file
         self.solver_path: str = cmd_args.solver
         self.temp_folder_path: str = cmd_args.temp_dir
         self.time_limit: int = cmd_args.time_limit
-        self.output_dir_path: str = cmd_args.output_dir
+        self.output_folder_path: str = cmd_args.output_dir
         
         if not os.path.exists(self.input_file_path):
             print('file-not-found')
@@ -95,9 +112,10 @@ class Leader:
             self.input_file_path.rfind('/') + 1: self.input_file_path.find('.smt2')]
     
     def init_logging(self):
-        if self.output_dir_path != None:
-            logging.basicConfig(format='%(relativeCreated)d - %(levelname)s - %(message)s', 
-                    filename=f'{self.output_dir_path}/log', level=logging.INFO)
+        log_dir_path = f'{self.output_folder_path}/logs'
+        os.makedirs(log_dir_path, exist_ok=True)
+        logging.basicConfig(format='%(relativeCreated)d - %(levelname)s - %(message)s', 
+                filename=f'{log_dir_path}/leader.log', level=logging.DEBUG)
         current_time = datetime.now()
         formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
         logging.info(f'start-time {formatted_time} ({self.start_time})')
@@ -107,11 +125,12 @@ class Leader:
     
     # solver original task with base solver
     def solve_original_task(self):
+        logging.debug('solve_original_task()')
         # run original task
         cmd =  [self.solver_path,
                 self.input_file_path
             ]
-        logging.info('exec-command {}'.format(' '.join(cmd)))
+        logging.debug('exec-command {}'.format(' '.join(cmd)))
         # print(" ".join(cmd))
         self.original_process = subprocess.Popen(
                 cmd,
@@ -126,22 +145,37 @@ class Leader:
     def get_result(self):
         return self.tree.get_result()
     
+    def add_split_candidate(self, coord_rank):
+        self.split_candidate.append(coord_rank)
+        # heapq.heappush(self.split_candidate, 
+        #         (self.coordinators[coord_rank].last_split + self.split_tabu, coord_rank)
+        #     )
+    
+    def get_split_candidate(self):
+        return self.split_candidate.popleft()
+        # return heapq.heappop(self.split_candidate)
+    
     def update_assign_coordinator(self, parent: DistributedNode, idle_coord: int):
-        current_time = self.get_current_time()
         child = self.tree.split_node_from(parent, idle_coord)
-        self.coordinators[idle_coord].assign_node(child, current_time)
-        self.split_candidate.put((idle_coord, current_time))
+        self.coordinators[idle_coord].assign_node(child)
+        self.add_split_candidate(idle_coord)
+        
     
     def update_split_coordinator(self, split_coord: int):
-        current_time = self.get_current_time()
-        self.coordinators[split_coord].split_node(current_time)
-        self.split_candidate.put((split_coord, current_time))
+        self.coordinators[split_coord].split_node()
+        self.add_split_candidate(split_coord)
     
     def update_split_assign_info(self, split_coord: int, idle_coord: int):
-        parent = self.coordinators[split_coord].assign_to
+        parent = self.coordinators[split_coord].assigned
         assert(parent != None)
         self.update_assign_coordinator(parent, idle_coord)
         self.update_split_coordinator(split_coord)
+        logging.info(f'split: (node-{self.coordinators[idle_coord].assigned.id} coordinator-{idle_coord}) '
+                     f'from (node-{self.coordinators[split_coord].assigned.id} coordinator-{split_coord})')
+    
+    def set_coordinator_idle(self, coord_rank):
+        self.coordinators[coord_rank].node_solved()
+        self.idle_coordinators.append(coord_rank)
     
     def check_coordinators(self):
         msg_status = MPI.Status()
@@ -149,6 +183,7 @@ class Leader:
             src = msg_status.Get_source()
             msg_type = MPI.COMM_WORLD.recv(source=src, tag=1)
             assert(isinstance(msg_type, ControlMessage.C2L))
+            logging.debug(f'receive {msg_type} message from coordinator-{src}')
             if msg_type.is_split_succeed():
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
                 self.send_assign_message(src, target_rank)
@@ -156,16 +191,20 @@ class Leader:
                 self.update_split_assign_info(src, target_rank)
             elif msg_type.is_split_failed():
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
-                self.idle_coordinators.put(target_rank)
-                self.split_candidate.put((src, self.get_current_time()))
+                self.idle_coordinators.append(target_rank)
+                coord: CoordinatorInfo = self.coordinators[src]
+                if coord.assigned != None:
+                    self.add_split_candidate(src)
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
                 result = MPI.COMM_WORLD.recv(source=src, tag=2)
-                node = self.coordinators[src].assign_to
+                node = self.coordinators[src].assigned
+                logging.info(f'solved: node-{node.id} is {result}')
                 self.tree.node_partial_solved(node, result)
+                self.tree.log_display()
                 if self.is_done():
                     return
-                self.idle_coordinators.put(src)
+                self.set_coordinator_idle(src)
             # elif msg_type.is_XXX:
             #     # coordinator {src} report current solving info
             #     ### TBD ###
@@ -183,43 +222,46 @@ class Leader:
         out_data, err_data = p.communicate()
         sta : str = out_data.strip('\n').strip(' ')
         if sta == 'sat':
-            result = DistributedNodeStatus.sat
+            result = NodeStatus.sat
         elif sta == 'unsat':
-            result = DistributedNodeStatus.unsat
+            result = NodeStatus.unsat
         else:
             assert(False)
-        self.tree.update_node_status(self.tree.root, result, 
-                                     DistributedNodeSolvedReason.original)
+        
+        self.tree.original_solved(result)
         logging.info(f'solved-by-original {sta}')
 
     def assign_root_node(self):
+        logging.debug(f'assign_root_node()')
         os.makedirs(f'{self.temp_folder_path}/tasks/round-0', exist_ok=True)
         shutil.copyfile(self.input_file_path, 
                         f'{self.temp_folder_path}/tasks/round-0/task-root.smt2')
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                             dest=0, tag=1)
+        self.tree.assign_root_node()
         
-        self.tree.split_node_from(None, 0)
-        
-        self.update_assign_coordinator(self.tree.root, )
+        self.coordinators[0].assign_node(self.tree.root)
+        self.add_split_candidate(0)
     
     def get_next_idle_coordinator(self):
         # FIFO
-        if self.idle_coordinators.empty():
+        if len(self.idle_coordinators) == 0:
             return None
-        return self.idle_coordinators.get()
+        return self.idle_coordinators.popleft()
     
     def select_coordinator_to_split(self):
         # FIFO
-        while not self.split_candidate.empty():
-            coord_id, time_stamp = self.split_candidate.get()
+        while len(self.split_candidate) > 0:
+            coord_rank = self.get_split_candidate()
             # assert(isinstance(self.coordinators[ret], CoordinatorInfo))
-            split_coord: CoordinatorInfo = self.coordinators[coord_id]
-            if time_stamp != split_coord.last_split:
+            split_coord: CoordinatorInfo = self.coordinators[coord_rank]
+            if split_coord.assigned == None:
                 continue
-            if split_coord.assign_to == None:
-                continue
-            return coord_id
+            if self.get_current_time() >= split_coord.last_split + self.split_tabu:
+                return coord_rank
+            else:
+                self.add_split_candidate(coord_rank)
+                return None
         return None
     
     def send_split_message(self, split_coord, idle_coord):
@@ -235,12 +277,16 @@ class Leader:
                             dest=idle_coord, tag=2)
     
     def assign_node_to_idle_coordinator(self):
+        # logging.debug('assign_node_to_idle_coordinator()')
         idle_coord = self.get_next_idle_coordinator()
         if idle_coord == None:
             return
         split_coord = self.select_coordinator_to_split()
         if split_coord == None:
+            self.idle_coordinators.append(idle_coord)
             return
+        # logging.info(f'idle_coord: {idle_coord}')
+        # logging.info(f'split_coord: {split_coord}')
         logging.info(f'assign node from coordinator-{split_coord} to coordinator-{idle_coord}')
         self.send_split_message(split_coord, idle_coord)
         # assert(self.split_target[split_coord] == -1)
@@ -260,11 +306,12 @@ class Leader:
             self.check_coordinators()
             if self.is_done():
                 return
-            self.assign_node_to_idle_coordinator()
+            if len(self.idle_coordinators) > 0:
+                self.assign_node_to_idle_coordinator()
+            else:
+                time.sleep(0.1)
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
-            if self.idle_coordinators.empty():
-                time.sleep(0.1)
 
     def terminate_coordinators(self):
         for i in range(self.num_nodes):
@@ -275,30 +322,35 @@ class Leader:
         try:
             self.solve()
         except TimeoutError:
-            self.result = 'timeout'
+            result = 'timeout'
             logging.info('timeout')
         # except AssertionError as ae:
-        #     self.result = 'AssertionError'
+        #     result = 'AssertionError'
         #     # print(f'AssertionError: {ae}')
         #     # logging.info(f'AssertionError: {ae}')
         # except Exception as e:
-        #     self.result = 'Exception'
+        #     result = 'Exception'
         #     # print(f'Exception: {e}')
         #     # logging.info(f'Exception: {e}')
+        else:
+            status: NodeStatus = self.get_result()
+            if status.is_sat():
+                result = 'sat'
+            elif status.is_unsat():
+                result = 'unsat'
+            else:
+                assert(False)
         
         end_time = time.time()
         execution_time = end_time - self.start_time
-        print(self.result)
+        
+        print(result)
         print(execution_time)
         
-        if self.output_dir_path != None:
-            with open(f'{self.output_dir_path}/result.txt', 'w') as f:
-                f.write(f'{self.result}\n{execution_time}\n')
+        if self.output_folder_path != None:
+            with open(f'{self.output_folder_path}/result.txt', 'w') as f:
+                f.write(f'{result}\n{execution_time}\n')
         
         self.terminate_coordinators()
         ### TBD: Terminate and clean up ###
         # MPI.COMM_WORLD.Abort()
-
-if __name__ == '__main__':
-    ap_leader = Leader()
-    ap_leader()

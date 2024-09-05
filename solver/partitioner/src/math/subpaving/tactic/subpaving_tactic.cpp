@@ -419,7 +419,7 @@ class subpaving_tactic : public tactic {
                 ss << "task-" << m_task.m_node_id;
                 task_name = ss.str();
             }
-            std::ofstream ofs(m_output_dir + "/tasks/" + task_name + ".smt2");
+            std::ofstream ofs(m_output_dir + "/" + task_name + ".smt2");
             
             ast_smt_pp pp(m());
             pp.set_benchmark_name(task_name.c_str());

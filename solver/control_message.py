@@ -5,7 +5,6 @@ class ControlMessage:
     
     # Leader To Coordinator
     class L2C(Enum):
-        
         # assign a node from coordinator {rank} to [current]
         assign_node = auto()
         # request split a subnode to coordinator {rank}
