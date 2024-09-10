@@ -13,9 +13,11 @@ from partition_tree import DistributedTree
 from partition_tree import NodeStatus
 from partition_tree import NodeSolvedReason
 from control_message import ControlMessage
+from coordinator import CoordinatorStatus
 
 class CoordinatorInfo:
     def __init__(self, rank, start_time):
+        self.status = CoordinatorStatus.idle
         self.assigned = None
         self.solving_round = 0
         self.split_count = 0
@@ -29,6 +31,8 @@ class CoordinatorInfo:
         return time.time() - self.start_time
     
     def assign_node(self, node: DistributedNode):
+        assert(self.status.is_idle())
+        self.status = CoordinatorStatus.solving
         self.assigned = node
         self.solving_round += 1
         self.split_count = 0
@@ -36,17 +40,21 @@ class CoordinatorInfo:
         self.last_split = self.get_current_time()
         
     def split_node(self):
+        assert(self.status.is_splitting())
+        self.status = CoordinatorStatus.solving
         self.split_count += 1
         self.last_split = self.get_current_time()
         
     def node_solved(self):
+        self.status = CoordinatorStatus.idle
         self.assigned = None
 
 class Leader:
     def __init__(self):
         self.solve_original_flag = False
         # self.solve_original_flag = False
-        self.split_tabu = 1.0
+        self.split_tabu = 5.0
+        # self.split_tabu_rate = 1.5
         
         self.leader_rank = MPI.COMM_WORLD.Get_rank()
         self.num_nodes = self.leader_rank
@@ -72,7 +80,7 @@ class Leader:
         
         self.idle_coordinators = deque([i for i in range(1, self.num_nodes)])
         self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_nodes)]
-        self.split_candidate = deque()
+        self.next_split_rank = 0
         logging.debug(f'init done!')
     
     def init_params(self):    
@@ -145,25 +153,16 @@ class Leader:
     def get_result(self):
         return self.tree.get_result()
     
-    def add_split_candidate(self, coord_rank):
-        self.split_candidate.append(coord_rank)
-        # heapq.heappush(self.split_candidate, 
-        #         (self.coordinators[coord_rank].last_split + self.split_tabu, coord_rank)
-        #     )
-    
-    def get_split_candidate(self):
-        return self.split_candidate.popleft()
-        # return heapq.heappop(self.split_candidate)
-    
     def update_assign_coordinator(self, parent: DistributedNode, idle_coord: int):
         child = self.tree.split_node_from(parent, idle_coord)
         self.coordinators[idle_coord].assign_node(child)
-        self.add_split_candidate(idle_coord)
-        
     
     def update_split_coordinator(self, split_coord: int):
         self.coordinators[split_coord].split_node()
-        self.add_split_candidate(split_coord)
+    
+    # def update_split_tabu(self):
+    #     logging.debug(f'update split tabu: {self.split_tabu}s')
+    #     self.split_tabu *= self.split_tabu_rate
     
     def update_split_assign_info(self, split_coord: int, idle_coord: int):
         parent = self.coordinators[split_coord].assigned
@@ -172,6 +171,7 @@ class Leader:
         self.update_split_coordinator(split_coord)
         logging.info(f'split: (node-{self.coordinators[idle_coord].assigned.id} coordinator-{idle_coord}) '
                      f'from (node-{self.coordinators[split_coord].assigned.id} coordinator-{split_coord})')
+        # self.update_split_tabu()
     
     def set_coordinator_idle(self, coord_rank):
         self.coordinators[coord_rank].node_solved()
@@ -187,14 +187,15 @@ class Leader:
             if msg_type.is_split_succeed():
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
                 self.send_assign_message(src, target_rank)
+                self.send_transfer_message(src, target_rank)
                 # split node {path} to coordinator {target_rank}
                 self.update_split_assign_info(src, target_rank)
             elif msg_type.is_split_failed():
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
                 self.idle_coordinators.append(target_rank)
                 coord: CoordinatorInfo = self.coordinators[src]
-                if coord.assigned != None:
-                    self.add_split_candidate(src)
+                if coord.status.is_splitting():
+                    coord.status = CoordinatorStatus.solving
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
                 result = MPI.COMM_WORLD.recv(source=src, tag=2)
@@ -241,7 +242,6 @@ class Leader:
         self.tree.assign_root_node()
         
         self.coordinators[0].assign_node(self.tree.root)
-        self.add_split_candidate(0)
     
     def get_next_idle_coordinator(self):
         # FIFO
@@ -249,20 +249,17 @@ class Leader:
             return None
         return self.idle_coordinators.popleft()
     
-    def select_coordinator_to_split(self):
+    def select_coordinator_to_split(self, skip_tabu: bool):
         # FIFO
-        while len(self.split_candidate) > 0:
-            coord_rank = self.get_split_candidate()
-            # assert(isinstance(self.coordinators[ret], CoordinatorInfo))
-            split_coord: CoordinatorInfo = self.coordinators[coord_rank]
-            if split_coord.assigned == None:
-                continue
-            if self.get_current_time() >= split_coord.last_split + self.split_tabu:
-                return coord_rank
-            else:
-                self.add_split_candidate(coord_rank)
-                return None
-        return None
+        rank = self.next_split_rank
+        self.next_split_rank = (rank + 1) % self.num_nodes
+        split_coord: CoordinatorInfo = self.coordinators[rank]
+
+        if split_coord.status.is_solving() and \
+           (skip_tabu or self.get_current_time() >= split_coord.last_split + self.split_tabu):
+            return rank
+        else:
+            return None
     
     def send_split_message(self, split_coord, idle_coord):
         MPI.COMM_WORLD.send(ControlMessage.L2C.request_split,
@@ -276,18 +273,29 @@ class Leader:
         MPI.COMM_WORLD.send(split_coord, 
                             dest=idle_coord, tag=2)
     
+    def send_transfer_message(self, split_coord, idle_coord):
+        MPI.COMM_WORLD.send(ControlMessage.L2C.transfer_node,
+                            dest=split_coord, tag=1)
+        MPI.COMM_WORLD.send(idle_coord, 
+                            dest=split_coord, tag=2)
+    
     def assign_node_to_idle_coordinator(self):
         # logging.debug('assign_node_to_idle_coordinator()')
         idle_coord = self.get_next_idle_coordinator()
         if idle_coord == None:
             return
-        split_coord = self.select_coordinator_to_split()
+        if self.coordinators[idle_coord].solving_round == 0:
+            skip_tabu = True
+        else:
+            skip_tabu = False
+        split_coord = self.select_coordinator_to_split(skip_tabu)
         if split_coord == None:
             self.idle_coordinators.append(idle_coord)
             return
         # logging.info(f'idle_coord: {idle_coord}')
         # logging.info(f'split_coord: {split_coord}')
         logging.info(f'assign node from coordinator-{split_coord} to coordinator-{idle_coord}')
+        self.coordinators[split_coord].status = CoordinatorStatus.splitting
         self.send_split_message(split_coord, idle_coord)
         # assert(self.split_target[split_coord] == -1)
         # self.split_target[split_coord] = idle_coord
@@ -308,8 +316,7 @@ class Leader:
                 return
             if len(self.idle_coordinators) > 0:
                 self.assign_node_to_idle_coordinator()
-            else:
-                time.sleep(0.1)
+            time.sleep(0.1)
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
 
@@ -323,15 +330,14 @@ class Leader:
             self.solve()
         except TimeoutError:
             result = 'timeout'
-            logging.info('timeout')
         # except AssertionError as ae:
         #     result = 'AssertionError'
         #     # print(f'AssertionError: {ae}')
         #     # logging.info(f'AssertionError: {ae}')
-        # except Exception as e:
-        #     result = 'Exception'
-        #     # print(f'Exception: {e}')
-        #     # logging.info(f'Exception: {e}')
+        except Exception as e:
+            result = 'Exception'
+            print(f'Leader Exception: {e}')
+            logging.info(f'Exception: {e}')
         else:
             status: NodeStatus = self.get_result()
             if status.is_sat():
@@ -346,6 +352,7 @@ class Leader:
         
         print(result)
         print(execution_time)
+        logging.info(f'result: {result}, time: {execution_time}')
         
         if self.output_folder_path != None:
             with open(f'{self.output_folder_path}/result.txt', 'w') as f:

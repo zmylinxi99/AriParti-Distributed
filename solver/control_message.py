@@ -5,18 +5,23 @@ class ControlMessage:
     
     # Leader To Coordinator
     class L2C(Enum):
-        # assign a node from coordinator {rank} to [current]
-        assign_node = auto()
         # request split a subnode to coordinator {rank}
         request_split = auto()
+        # transfer the split subnode to coordinator {rank}
+        transfer_node = auto()
+        # assign a node from coordinator {rank} to [current]
+        assign_node = auto()
         # terminate coordinator {rank}
         terminate_coordinator = auto()
         
-        def is_assign_node(self):
-            return self == ControlMessage.L2C.assign_node
-        
         def is_request_split(self):
             return self == ControlMessage.L2C.request_split
+        
+        def is_transfer_node(self):
+            return self == ControlMessage.L2C.transfer_node
+        
+        def is_assign_node(self):
+            return self == ControlMessage.L2C.assign_node
         
         def is_terminate_coordinator(self):
             return self == ControlMessage.L2C.terminate_coordinator

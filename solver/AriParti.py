@@ -1,8 +1,10 @@
+import os
 from mpi4py import MPI
 from leader import Leader
 from coordinator import Coordinator
 
 if __name__ == '__main__':
+    os.sched_setaffinity(0, set(range(os.cpu_count())))
     rank = MPI.COMM_WORLD.Get_rank()
     leader_rank = MPI.COMM_WORLD.Get_size() - 1
     # print(f'rank: {rank}')
@@ -14,4 +16,4 @@ if __name__ == '__main__':
         ap_leader()
     else:
         assert(False)
-    
+    MPI.Finalize()

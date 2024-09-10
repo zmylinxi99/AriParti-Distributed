@@ -90,10 +90,10 @@ if __name__ == '__main__':
     with open(f'{output_dir}/rankfile', 'w') as rfile:
         for i in range(node_number):
             node_ip = worker_node_ips[i]
-            rfile.write(f'rank {i}={node_ip} slot=0\n')
+            rfile.write(f'rank {i}={node_ip} slot=*\n')
             # ##//linxi-test
             # print(f'{node_ip} slots={slot}\n')
-        rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=1\n')
+        rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=*\n')
     
     cmd_paras = [
         'mpiexec',
@@ -117,13 +117,14 @@ if __name__ == '__main__':
         # f'--temp-dir {temp_folder_path}',
         f'--available-cores-list "{json.dumps(worker_node_cores)}"',
         # f'--partitioner {script_dir}/binary-files/partitioner-bin',
+        ##//linxi-test
         f'--partitioner {script_dir}/partitioner/build/z3',
         f'--solver {script_dir}/binary-files/{base_solver}',
     ])
     
     cmd = ' '.join(cmd_paras)
     # ##//linxi-test
-    print(f"command:\n{cmd}")
+    # print(f"command:\n{cmd}")
     
     result = subprocess.run(
         cmd,
@@ -133,13 +134,13 @@ if __name__ == '__main__':
     )
     
     # ##//linxi-test
-    print(f'stdout:')
-    print(result.stdout.decode("utf-8"))
-    print(f'stderr:')
-    print(result.stderr.decode("utf-8"))
+    # print(f'stdout:')
+    # print(result.stdout.decode("utf-8"))
+    # print(f'stderr:')
+    # print(result.stderr.decode("utf-8"))
     
     sys.stdout.write(result.stdout.decode("utf-8"))
-    # sys.stderr.write(result.stderr.decode("utf-8"))
+    sys.stderr.write(result.stderr.decode("utf-8"))
     
     if output_total_time:
         end_time = time.time()

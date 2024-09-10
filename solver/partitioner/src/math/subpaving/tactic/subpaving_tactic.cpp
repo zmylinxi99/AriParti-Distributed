@@ -625,10 +625,10 @@ tactic * mk_subpaving_tactic(ast_manager & m, params_ref const & p) {
     params_ref simp2_p = p;
     simp2_p.set_bool("arith_lhs", true);
     simp2_p.set_bool("mul_to_power", true);
-
     return and_then(
-                mk_elim_term_ite_tactic(m, p),
-                mk_solve_eqs_tactic(m, p),
+                mk_elim_term_ite_tactic(m, p),\
+                //#linxi TBD
+                // mk_solve_eqs_tactic(m, p),
                 using_params(mk_simplify_tactic(m, p), simp_p),
                 mk_tseitin_cnf_core_tactic(m, p),
                 using_params(mk_simplify_tactic(m, p), simp2_p),
