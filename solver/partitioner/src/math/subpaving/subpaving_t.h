@@ -30,7 +30,6 @@ Revision History:
 #include "util/params.h"
 #include "util/statistics.h"
 #include "util/lbool.h"
-#include "util/id_gen.h"
 #include "util/rlimit.h"
 
 #ifdef _MSC_VER
@@ -572,8 +571,6 @@ private:
     ptr_vector<atom>          m_unit_clauses;
     ptr_vector<clause>        m_clauses;
     ptr_vector<clause>        m_lemmas;
-    
-    id_gen                    m_node_id_gen;
 
     uint64_t                  m_timestamp;
     node *                    m_root;
@@ -622,6 +619,7 @@ private:
     unsigned            m_max_running_tasks;
     unsigned            m_max_alive_tasks;
     
+    unsigned            m_read_buffer_len;
     char *              m_read_buffer;
     unsigned            m_read_buffer_head;
     unsigned            m_read_buffer_tail;
@@ -915,9 +913,19 @@ private:
 
     bool read_line_from_master();
 
+    bool update_node_state_unsat(unsigned id);
+
+    void unsat_push_down(node * n);
+
+    bool can_propagate_unsat(node * n);
+
+    void unsat_push_up(node * n);
+
+    void node_solved_unsat(node * n);
+    
     void parse_line(const std::string & line);
 
-    bool read_parse_line();
+    // bool read_parse_line();
 
     void communicate_with_master();
 

@@ -790,16 +790,15 @@ template<typename C>
 typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
     void * mem = allocator().allocate(sizeof(node));
     node * r;
-    if (parent == nullptr)
-        r = new (mem) node(*this, m_node_id_gen.mk(), m_is_bool);
-    else
-        r = new (mem) node(parent, m_node_id_gen.mk());
-    
     if (parent == nullptr) {
+        r = new (mem) node(*this, m_num_nodes, m_is_bool);
+
         for (unsigned i = 0; i < m_var_key_num; ++i)
             r->key_rank().push_back(i);
     }
     else {
+        r = new (mem) node(parent, m_num_nodes);
+
         // dynamic key rank
         unsigned pos = 0;
         for (unsigned i = 0; i < m_var_key_num; ++i) {
@@ -822,7 +821,7 @@ typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
 
     // Add node in the leaf dlist
     push_front(r);
-    m_num_nodes++;
+    ++m_num_nodes;
     m_nodes.push_back(r);
     m_nodes_state.push_back(node_state::WAITING);
     return r;
@@ -834,9 +833,6 @@ void context_t<C>::del_node(node * n) {
 
     SASSERT(m_num_nodes > 0);
     m_num_nodes--;
-
-    // recycle id
-    m_node_id_gen.recycle(n->id());
 
     // disconnect n from list of leaves.
     remove_from_leaf_dlist(n);
@@ -1980,7 +1976,7 @@ void context_t<C>::write_debug_line_to_master(const std::string & line) {
 template<typename C>
 bool context_t<C>::read_line_from_master() {
     if (m_read_buffer_head >= m_read_buffer_tail) {
-        ssize_t n = read(STDIN_FILENO, m_read_buffer, sizeof(m_read_buffer) - 1);
+        ssize_t n = read(STDIN_FILENO, m_read_buffer, m_read_buffer_len - 1);
         if (n > 0) {
             m_read_buffer_head = 0;
             m_read_buffer_tail = static_cast<unsigned>(n);
@@ -2007,6 +2003,7 @@ void context_t<C>::init_communication() {
     int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
     fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
     
+    m_read_buffer_len = (1u << 10);
     m_read_buffer = new char[1024];
     m_read_buffer_head = 0;
     m_read_buffer_tail = 0;
@@ -2443,6 +2440,70 @@ void context_t<C>::select_best_var(node * n) {
     }
 }
 
+
+// return true for already unsat
+template<typename C>
+bool context_t<C>::update_node_state_unsat(unsigned id) {
+    if (m_nodes_state[id] == node_state::UNSAT)
+        return true;
+    if (m_nodes_state[id] == node_state::WAITING)
+        --m_alive_task_num;
+    m_nodes_state[id] = node_state::UNSAT;
+    return false;
+}
+
+template<typename C>
+void context_t<C>::unsat_push_down(node * n) {
+    //#linxi TBD
+    if (update_node_state_unsat(n->id()))
+        return ;
+    node * ch = n->first_child();
+    while (ch != nullptr) {
+        unsat_push_down(ch);
+        ch = ch->next_sibling();
+    }
+}
+
+template<typename C>
+bool context_t<C>::can_propagate_unsat(node * n) {
+    node * ch = n->first_child();
+    if (ch == nullptr)
+        return false;
+    while (ch != nullptr) {
+        if (m_nodes_state[ch->id()] != node_state::UNSAT)
+            return false;
+        ch = ch->next_sibling();
+    }
+    return true;
+}
+
+template<typename C>
+void context_t<C>::unsat_push_up(node * n) {
+    // SASSERT(m_nodes_state[id] != node_state::UNSAT);
+    if (m_nodes_state[n->id()] == node_state::UNSAT)
+        return ;
+    if (!can_propagate_unsat(n))
+        return ;
+    update_node_state_unsat(n->id());
+    node * parent = n->parent();
+    if (parent != nullptr)
+        unsat_push_up(parent);
+}
+
+template<typename C>
+void context_t<C>::node_solved_unsat(node * n) {\
+    if (update_node_state_unsat(n->id()))
+        return ;
+    node * parent = n->parent();
+    if (parent != nullptr)
+        unsat_push_up(parent);
+    node * ch = n->first_child();
+    while (ch != nullptr) {
+        unsat_push_down(ch);
+        ch = ch->next_sibling();
+    }
+}
+
 template<typename C>
 void context_t<C>::parse_line(const std::string & line) {
     std::stringstream ss(line);
@@ -2452,10 +2513,7 @@ void context_t<C>::parse_line(const std::string & line) {
     if (op == control_message::C2P::unsat_node) {
         unsigned id;
         ss >> id;
-        if (m_nodes_state[id] == node_state::WAITING) {
-            m_nodes_state[id] = node_state::UNSAT;
-            --m_alive_task_num;
-        }
+        node_solved_unsat(m_nodes[id]);
     }
     else if (op == control_message::C2P::terminate_node) {
         unsigned id;
@@ -2470,21 +2528,20 @@ void context_t<C>::parse_line(const std::string & line) {
     }
 }
 
-template<typename C>
-bool context_t<C>::read_parse_line() {
-    if (!read_line_from_master())
-        return false;
-    write_debug_line_to_master("read line from master: " + m_current_line);
-    parse_line(m_current_line);
-    m_current_line = "";
-    // m_current_line.clear();
-    return true;
-}
+// template<typename C>
+// bool context_t<C>::read_parse_line() {
+//     if (!read_line_from_master())
+//         return false;
+//     return true;
+// }
 
 template<typename C>
 void context_t<C>::communicate_with_master() {
-    while (read_parse_line()) {
-        // do nothing
+    while (read_line_from_master()) {
+        write_debug_line_to_master("read line from master: " + m_current_line);
+        parse_line(m_current_line);
+        m_current_line = "";
+        // m_current_line.clear();
     }
 }
 
@@ -2513,6 +2570,10 @@ typename context_t<C>::node * context_t<C>::select_split_node() {
         TRACE("subpaving_main", tout << "selected node: #" << n->id() << ", depth: " << n->depth() << "\n";);
         remove_from_leaf_dlist(n);
         if (n->inconsistent()) {
+            // if (m_nodes_state[n->id()] != node_state::UNSAT) {
+            //     write_debug_line_to_master("partitioner-error n->inconsistent()");
+            //     // SASSERT(false);
+            // }
             m_nodes_state[n->id()] = node_state::UNSAT;
             continue;
         }

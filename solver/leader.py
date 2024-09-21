@@ -7,6 +7,7 @@ import subprocess
 from mpi4py import MPI
 from datetime import datetime
 import heapq
+import traceback
 from collections import deque
 from partition_tree import DistributedNode
 from partition_tree import DistributedTree
@@ -64,7 +65,7 @@ class Leader:
         self.start_time = time.time()
         self.tree = DistributedTree(self.start_time)
         
-        os.makedirs(f'{self.temp_folder_path}/tasks', exist_ok=True)
+        os.makedirs(self.temp_folder_path, exist_ok=True)
         
         # ##//linxi debug
         # print(self.temp_folder_path)
@@ -234,9 +235,10 @@ class Leader:
 
     def assign_root_node(self):
         logging.debug(f'assign_root_node()')
-        os.makedirs(f'{self.temp_folder_path}/tasks/round-0', exist_ok=True)
+        target_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0'
+        os.makedirs(target_path, exist_ok=True)
         shutil.copyfile(self.input_file_path, 
-                        f'{self.temp_folder_path}/tasks/round-0/task-root.smt2')
+                        f'{target_path}/task-root.smt2')
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                             dest=0, tag=1)
         self.tree.assign_root_node()
@@ -336,8 +338,9 @@ class Leader:
         #     # logging.info(f'AssertionError: {ae}')
         except Exception as e:
             result = 'Exception'
-            print(f'Leader Exception: {e}')
-            logging.info(f'Exception: {e}')
+            # print(f'Leader Exception: {e}')
+            logging.info(f'Leader Exception: {e}')
+            logging.info(f'Traceback: {traceback.format_exc()}')
         else:
             status: NodeStatus = self.get_result()
             if status.is_sat():
