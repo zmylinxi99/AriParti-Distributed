@@ -1,5 +1,5 @@
 
-/solver/partitioner/*build*/**
+/solver/partitioner/build/**
 # Auto generated files.
 config.log
 /solver/partitioner/config.status
@@ -12,18 +12,15 @@ config-release.mk
 /solver/partitioner/src/util/version.h
 /solver/partitioner/src/util/z3_version.h
 
-/solver/partitioner/.vscode
-
 # .hpp files are automatically generated
 *.hpp
-
 *.pyc
 
 # PartitionSMT
 # /solver/
 /linxi-develop/
-/.vscode/
-__pycache__
 /expr-src/
-
 /solver/binary-files/
+
+.vscode
+__pycache__

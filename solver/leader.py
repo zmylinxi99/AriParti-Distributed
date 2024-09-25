@@ -242,7 +242,6 @@ class Leader:
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                             dest=0, tag=1)
         self.tree.assign_root_node()
-        
         self.coordinators[0].assign_node(self.tree.root)
     
     def get_next_idle_coordinator(self):
@@ -321,12 +320,12 @@ class Leader:
             time.sleep(0.1)
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
-
+    
     def terminate_coordinators(self):
         for i in range(self.num_nodes):
             MPI.COMM_WORLD.send(ControlMessage.L2C.terminate_coordinator,
                                 dest=i, tag=1)
-        
+    
     def __call__(self):
         try:
             self.solve()

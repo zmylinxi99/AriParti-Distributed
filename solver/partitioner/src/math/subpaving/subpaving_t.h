@@ -624,6 +624,7 @@ private:
     unsigned            m_read_buffer_head;
     unsigned            m_read_buffer_tail;
     std::string         m_current_line;
+    bool                m_partitioner_debug;
     std::stringstream   m_temp_stringstream;
     
     clock_t             m_start_time;
@@ -910,6 +911,8 @@ private:
     void write_line_to_master(const std::string & data);
     
     void write_debug_line_to_master(const std::string & data);
+
+    void write_debug_ss_line_to_master();
 
     bool read_line_from_master();
 

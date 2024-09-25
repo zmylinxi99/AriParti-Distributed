@@ -1970,7 +1970,18 @@ void context_t<C>::write_ss_line_to_master() {
 
 template<typename C>
 void context_t<C>::write_debug_line_to_master(const std::string & line) {
+    if (!m_partitioner_debug)
+        return ;
     std::cout << control_message::P2C::debug_info << " " << line << std::endl;
+}
+
+template<typename C>
+void context_t<C>::write_debug_ss_line_to_master() {
+    if (!m_partitioner_debug)
+        return ;
+    write_debug_line_to_master(m_temp_stringstream.str());
+    m_temp_stringstream.str("");
+    m_temp_stringstream.clear();
 }
 
 template<typename C>
@@ -1980,7 +1991,8 @@ bool context_t<C>::read_line_from_master() {
         if (n > 0) {
             m_read_buffer_head = 0;
             m_read_buffer_tail = static_cast<unsigned>(n);
-        } else if (n < 0 && errno != EAGAIN) {
+        }
+        else if (n < 0 && errno != EAGAIN) {
             std::cerr << "Error reading input" << std::endl;
             UNREACHABLE();
         }
@@ -2012,6 +2024,7 @@ void context_t<C>::init_communication() {
 template<typename C>
 void context_t<C>::init_partition() {
     m_init = true;
+    m_partitioner_debug = true;
     m_max_propagate = m_is_int.size();
 
     if (m_max_propagate > 1024)
@@ -2446,8 +2459,13 @@ template<typename C>
 bool context_t<C>::update_node_state_unsat(unsigned id) {
     if (m_nodes_state[id] == node_state::UNSAT)
         return true;
-    if (m_nodes_state[id] == node_state::WAITING)
+    if (m_nodes_state[id] == node_state::WAITING) {
+        {
+            m_temp_stringstream << "node-" << id << " is unsat";
+            write_debug_ss_line_to_master();
+        }
         --m_alive_task_num;
+    }
     m_nodes_state[id] = node_state::UNSAT;
     return false;
 }
@@ -2520,6 +2538,10 @@ void context_t<C>::parse_line(const std::string & line) {
         ss >> id;
         if (m_nodes_state[id] == node_state::WAITING) {
             m_nodes_state[id] = node_state::TERMINATED;
+            {
+                m_temp_stringstream << "node-" << id << " is terminated";
+                write_debug_ss_line_to_master();
+            }
             --m_alive_task_num;
         }
     }
@@ -2711,6 +2733,12 @@ bool context_t<C>::create_new_task() {
         convert_node_to_task(n);
         m_leaf_heap.emplace(m_ptask->m_node_id, m_ptask->m_depth, 
             m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
+        
+        {
+            m_temp_stringstream << "alive tasks: "<< m_alive_task_num
+                << "(" << m_max_alive_tasks << "), nodes: " << sz;
+            write_debug_ss_line_to_master();
+        }
         return true;
     }
     return false;

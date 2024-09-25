@@ -22,7 +22,6 @@ class NodeStatus(Enum):
     unsat = auto()
     solving = auto()
     terminated = auto()
-    
     error = auto()
     
     def is_unsolved(self):
@@ -62,7 +61,6 @@ class NodeSolvedReason(Enum):
 class PartitionNode:
     def __init__(self, id, parent, make_time):
         self.assign_to = None
-        self.assigned_coord = None
         self.time_infos = {}
         self.children = []
         self.status: NodeStatus
@@ -118,6 +116,7 @@ class PartitionTree:
 
 class ParallelNode(PartitionNode):
     def __init__(self, id, parent, make_time, pid):
+        self.assigned_coord = None
         self.unsat_percentage = 0.0
         
         super().__init__(id, parent, make_time)
@@ -291,12 +290,9 @@ class ParallelTree(PartitionTree):
             self.unsyncs.append(node)
     
     def unsat_push_up(self, node: ParallelNode):
-        ### TBD ###
-        # assert(not node.status.is_unsat())
         if node.status.is_unsat():
             return
         if node.can_reason_unsat():
-            # self.sync_to_partitioner(node)
             self.propagate_node_unsat(node, NodeSolvedReason.children)
             if node.parent != None:
                 self.unsat_push_up(node.parent)
@@ -304,7 +300,6 @@ class ParallelTree(PartitionTree):
     def unsat_push_down(self, node: ParallelNode):
         if node.status.is_unsat():
             return
-        # self.sync_to_partitioner(node)
         self.propagate_node_unsat(node, NodeSolvedReason.ancester)
         for child in node.children:
             self.unsat_push_down(child)
@@ -312,11 +307,12 @@ class ParallelTree(PartitionTree):
     def node_solved_unsat(self,
             node: ParallelNode,
             reason: NodeSolvedReason):
+        if reason != NodeSolvedReason.partitioner:
+            self.sync_to_partitioner(node)
+        
         self.update_node_status(node,
                 NodeStatus.unsat,
                 reason)
-        if reason != NodeSolvedReason.partitioner:
-            self.sync_to_partitioner(node)
         
         if reason == NodeSolvedReason.itself:
             solve_time = self.get_node_solving_time(node)
@@ -360,6 +356,15 @@ class ParallelTree(PartitionTree):
                            NodeSolvedReason.itself,
                            self.get_current_time())
         self.solvings.append(node)
+        
+    def log_display_dfs(self, node: ParallelNode, depth: int):
+        logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
+        for child in node.children:
+            self.log_display_dfs(child, depth + 1)
+    
+    def log_display(self):
+        logging.debug(f'display parallel tree')
+        self.log_display_dfs(self.root, 0)
 
 class DistributedNode(PartitionNode):
     def __init__(self, id, parent, make_time):

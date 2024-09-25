@@ -2,7 +2,6 @@ from enum import Enum
 from enum import auto
 
 class ControlMessage:
-    
     # Leader To Coordinator
     class L2C(Enum):
         # request split a subnode to coordinator {rank}

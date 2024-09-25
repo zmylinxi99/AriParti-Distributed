@@ -261,6 +261,7 @@ class Coordinator:
         node.assign_to = None
         logging.info(f'solved: node-{node.id} is {sta}')
         self.tree.node_solved(node, sta)
+        self.log_tree_infos()
         if self.is_done():
             return False
         self.sync_ended_to_partitioner()
@@ -439,17 +440,18 @@ class Coordinator:
             self.send_split_failed_to_leader(target_rank)
             return
         node = self.select_split_node()
-        logging.debug(f'split node: {node}')
         if node == None:
             self.send_split_failed_to_leader(target_rank)
             return
+        logging.debug(f'split node: {node}')
+        # self.tree.log_display()
         self.send_split_succeed_to_leader(target_rank)
         self.split_node = node
         self.set_node_split(node, target_rank)
         
     def process_transfer_message(self):
         target_rank = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=2)
-        node: ParallelNode = self.split_node
+        # node: ParallelNode = self.split_node
         logging.debug(f'split node-{self.split_node.id} to coordinater-{target_rank}')
         self.send_split_node_to_coordinator(target_rank)
         # self.tree.perform_split(node)
@@ -502,12 +504,15 @@ class Coordinator:
                     break
                 else:
                     assert(False)
+            
             if self.status.is_solving():
                 if self.parallel_solving():
+                    self.tree.log_display()
                     self.send_result_to_leader()
                     self.round_clean_up()
                     self.status = CoordinatorStatus.idle
                     self.solving_round += 1
+                    logging.debug(f'round-{self.solving_round} is done')
             ### TBD ###
             # if len(self.running_tasks) + self.base_run_cnt >= self.max_running_tasks \
             #     or (not self.need_communicate):
