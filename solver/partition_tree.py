@@ -15,7 +15,6 @@ from enum import auto
 # solving -> sat BY (solver)
 #         -> unsat BY (solver, ancester, children, partitioner)
 #         -> unknown BY (solver, children)
-
 class NodeStatus(Enum):
     unsolved = auto()
     sat = auto()
@@ -153,7 +152,12 @@ class ParallelTree(PartitionTree):
         # self.endeds = []
         self.pid2node = {}
         self.unsyncs = []
+        
         self.solved_number = 0
+        self.propagated_number = 0
+        self.unsat_by_children_number = 0
+        self.unsat_by_ancestor_number = 0
+        
         self.total_solve_time = 0.0
         self.average_solve_time = 0.0
         self.split_thres_max = 30.0
@@ -280,6 +284,13 @@ class ParallelTree(PartitionTree):
         self.update_node_status(node, 
                                 NodeStatus.unsat, 
                                 reason)
+        self.propagated_number += 1
+        if reason == NodeSolvedReason.children:
+            self.unsat_by_children_number += 1
+        elif reason == NodeSolvedReason.ancester:
+            self.unsat_by_ancestor_number += 1
+        else:
+            assert(False)
         # self.write_line_to_partitioner(f'unsat-node {t.id}')
         if node.assign_to != None:
             node.assign_to.terminate()

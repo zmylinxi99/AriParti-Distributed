@@ -1,4 +1,3 @@
-
 import os
 import time
 import logging
@@ -135,18 +134,18 @@ class Coordinator:
             elif result == 'unsat':
                 self.result = NodeStatus.unsat
             elif result == 'unknown':
-                if self.tree.get_node_number() == 0:                
-                    MPI.COMM_WORLD.Abort()
-                ### TBD ###
-                pass
+                if self.tree.get_node_number() == 0:
+                    logging.error('Partitioner error')
+                    assert(False)
+                    # MPI.COMM_WORLD.Abort()
             else:
                 assert(False)
         else:
             op = ControlMessage.P2C(int(words[0]))
             if op.is_debug_info():
-                pass
                 # remains = ' '.join(words[1: ])
                 # logging.debug(f'partitioner-debug-info {remains}')
+                pass
             elif op.is_new_node():
                 pid = int(words[1])
                 ppid = int(words[2])
@@ -167,25 +166,26 @@ class Coordinator:
                 assert(False)
         
     def receive_message_from_partitioner(self):
-        if self.partitioner.status.is_done():
-            return
-        # is_wait_result = self.partitioner.status.is_wait_result()
-        
-        # while True:
+        is_done = self.partitioner.check_p_status()
         # for _ in range(self.available_cores):
-        for _ in range(16):
+        # for _ in range(16):
+        cnt = 0
+        while True:
+            if not is_done and cnt >= 16:
+                break
+            cnt += 1
             msg = self.partitioner.receive_message()
-            if msg == None:
+            if msg == None or msg == b'':
                 break
             msg = msg.strip(' \n')
-            if msg == '':
-                continue
             logging.debug(f'partitioner-message {msg}')
             self.process_partitioner_msg(msg)
-            if self.is_done():
+            if self.partitioner.status.is_done():
                 break
-        # if is_wait_result:
-        #     assert(self.partitioner.status.is_done())
+            # if self.is_done():
+            #     break
+        if is_done:
+            assert(self.partitioner.status.is_done())
     
     ### TBD ###
     # def need_terminate(self, t: Task):
@@ -298,7 +298,10 @@ class Coordinator:
     
     def log_tree_infos(self):
         logging.debug(f'nodes: {self.tree.get_node_number()}, '
-                      f'solvings: {self.tree.get_solving_number()}, '
+                      f'solvings: {self.tree.get_solving_number()}({self.available_cores}), '
+                      f'solved: {self.tree.solved_number}(itself), '
+                      f'{self.tree.unsat_by_children_number}(children), '
+                      f'{self.tree.unsat_by_ancestor_number}(ancestor)'
                     #   f'endeds: {self.tree.get_ended_number()}, '
                     #   f'unendeds: {self.tree.get_unended_number()}'
                 )
@@ -370,6 +373,7 @@ class Coordinator:
         # logging.debug('before check_solvings_status()')
         # self.log_tree_infos()
         if self.check_solvings_status():
+            self.tree.log_display()
             return True
         # logging.debug('before run_waiting_tasks()')
         # self.log_tree_infos()
@@ -388,7 +392,7 @@ class Coordinator:
     
     def solve_leader_root(self):
         while not MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
-            time.sleep(0.1)
+            time.sleep(0.01)
         msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
         assert(isinstance(msg_type, ControlMessage.L2C))
         assert(msg_type.is_assign_node())
@@ -507,7 +511,6 @@ class Coordinator:
             
             if self.status.is_solving():
                 if self.parallel_solving():
-                    self.tree.log_display()
                     self.send_result_to_leader()
                     self.round_clean_up()
                     self.status = CoordinatorStatus.idle
@@ -516,8 +519,9 @@ class Coordinator:
             ### TBD ###
             # if len(self.running_tasks) + self.base_run_cnt >= self.max_running_tasks \
             #     or (not self.need_communicate):
-            #     time.sleep(0.1)
-            time.sleep(0.1)
+            #     time.sleep(0.01)
+            
+            # time.sleep(0.01)
         self.clean_up()
     
     def __call__(self):
@@ -527,3 +531,4 @@ class Coordinator:
             # print(f'Coordinator-{self.rank} Exception: {e}')
             logging.info(f'Coordinator-{self.rank} Exception: {e}')
             logging.info(f'Traceback: {traceback.format_exc()}')
+            MPI.COMM_WORLD.Abort()

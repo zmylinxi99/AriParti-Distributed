@@ -2577,6 +2577,9 @@ template<typename C>
 typename context_t<C>::node * context_t<C>::select_next_node() {
     // return m_leaf_head; // filo
     // return m_leaf_tail; // fifo
+    // if (m_leaf_heap.empty())
+    //     return nullptr;
+    SASSERT(!m_leaf_heap.empty());
     unsigned nid = m_leaf_heap.top().m_id;
     m_leaf_heap.pop();
     return m_nodes[nid];
@@ -2695,6 +2698,7 @@ void context_t<C>::split_node(node * n) {
         m_temp_stringstream << control_message::P2C::new_unsat_node 
                             << " " << left->id() << " " << n->id();
         write_ss_line_to_master();
+        remove_from_leaf_dlist(left);
         m_nodes_state[left->id()] = node_state::UNSAT;
     }
 
@@ -2705,6 +2709,7 @@ void context_t<C>::split_node(node * n) {
         m_temp_stringstream << control_message::P2C::new_unsat_node 
                             << " " << right->id() << " " << n->id();
         write_ss_line_to_master();
+        remove_from_leaf_dlist(right);
         m_nodes_state[right->id()] = node_state::UNSAT;
     }
 }

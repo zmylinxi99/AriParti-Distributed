@@ -317,7 +317,7 @@ class Leader:
                 return
             if len(self.idle_coordinators) > 0:
                 self.assign_node_to_idle_coordinator()
-            time.sleep(0.1)
+            # time.sleep(0.01)
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
     
@@ -340,6 +340,7 @@ class Leader:
             # print(f'Leader Exception: {e}')
             logging.info(f'Leader Exception: {e}')
             logging.info(f'Traceback: {traceback.format_exc()}')
+            MPI.COMM_WORLD.Abort()
         else:
             status: NodeStatus = self.get_result()
             if status.is_sat():

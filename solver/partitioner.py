@@ -1,8 +1,8 @@
 import select
 import subprocess
-from enum import Enum
-from enum import auto
-from control_message import ControlMessage
+from enum import Enum, auto
+import logging
+
 
 class PartitionerStatus(Enum):
     running = auto()
@@ -36,14 +36,23 @@ class Partitioner:
         self.p: subprocess.Popen = p
     
     def is_running(self):
-        if not self.status.is_running():
+        return self.status.is_running()
+        
+    # True for p finished
+    def check_p_status(self):
+        if not self.is_running():
             return False
         rc = self.p.poll()
         if rc == None:
-            return True
-        assert(rc == 0)
+            return False
+        if rc != 0:
+            out_data, err_data = self.p.communicate()
+            logging.error('Partitioner Crashed!')
+            logging.error(f'output: {out_data}')
+            logging.error(f'error: {err_data}')
+            assert(False)
         self.status = PartitionerStatus.wait_result
-        return False
+        return True
     
     def send_message(self, msg: str):
         if not self.is_running():
@@ -52,13 +61,10 @@ class Partitioner:
         self.p.stdin.flush()
     
     def receive_message(self):
-        ready, _, _ = select.select([self.p.stdout], [], [], 0.05)
+        ready, _, _ = select.select([self.p.stdout], [], [], 0.01)
         if ready:
             return self.p.stdout.readline()
         return None
-    
-    def is_running(self):
-        return self.status.is_running()
     
     def set_status(self, result: str):
         if result == 'sat':
