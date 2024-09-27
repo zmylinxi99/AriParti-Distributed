@@ -1363,24 +1363,28 @@ lbool context_t<C>::value(atom * t, node * n) {
             bound * l = n->lower(x);
             if (u == nullptr && l == nullptr)
                 return l_undef;
-            if (u != nullptr && nm().eq(u->value(), t->value()) && 
-                l != nullptr && nm().eq(l->value(), t->value())) {
+            if (u != nullptr && nm().eq(u->value(), t->value()) 
+                && l != nullptr && nm().eq(l->value(), t->value())) {
                 if (t->is_lower())
                     return l_false;
                 else
                     return l_true;
             }
             if (t->is_lower()) {
-                if (u != nullptr && (nm().lt(u->value(), t->value()) || (u->is_open() && nm().eq(u->value(), t->value()))))
+                if (u != nullptr && (nm().lt(u->value(), t->value())
+                    || (u->is_open() && nm().eq(u->value(), t->value()))))
                     return l_true;
-                if (l != nullptr && (nm().gt(l->value(), t->value()) || (l->is_open() && nm().eq(l->value(), t->value()))))
+                if (l != nullptr && (nm().gt(l->value(), t->value())
+                    || (l->is_open() && nm().eq(l->value(), t->value()))))
                     return l_true;
                 return l_undef;
             }
             else {
-                if (u != nullptr && (nm().lt(u->value(), t->value()) || (u->is_open() && nm().eq(u->value(), t->value()))))
+                if (u != nullptr && (nm().lt(u->value(), t->value())
+                    || (u->is_open() && nm().eq(u->value(), t->value()))))
                     return l_false;
-                if (l != nullptr && (nm().gt(l->value(), t->value()) || (l->is_open() && nm().eq(l->value(), t->value()))))
+                if (l != nullptr && (nm().gt(l->value(), t->value())
+                    || (l->is_open() && nm().eq(l->value(), t->value()))))
                     return l_false;
                 return l_undef;
             }
@@ -2447,6 +2451,8 @@ void context_t<C>::select_best_var(node * n) {
         else {
             nm().sub(u->value(), l->value(), width);
         }
+        if (nm().le(width, 0.25))
+            m_curr_var_info.m_is_too_short = true;
         if (m_best_var_info.m_id == null_var || m_curr_var_info < m_best_var_info) {
             m_best_var_info.copy(m_curr_var_info);
         }

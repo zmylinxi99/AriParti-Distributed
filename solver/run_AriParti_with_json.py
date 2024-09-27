@@ -114,9 +114,9 @@ if __name__ == '__main__':
         # coordinator parameters
         # f'--temp-dir {temp_folder_path}',
         f'--available-cores-list "{json.dumps(worker_node_cores)}"',
-        # f'--partitioner {script_dir}/binary-files/partitioner-bin',
         ##//linxi-test
-        f'--partitioner {script_dir}/partitioner/build/z3',
+        f'--partitioner {script_dir}/binary-files/partitioner-bin',
+        # f'--partitioner {script_dir}/partitioner/build/z3',
         f'--solver {script_dir}/binary-files/{base_solver}',
     ])
     

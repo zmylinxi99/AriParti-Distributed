@@ -3,18 +3,16 @@ import shutil
 import time
 import logging
 import argparse
+import traceback
 import subprocess
 from mpi4py import MPI
 from datetime import datetime
-import heapq
-import traceback
 from collections import deque
-from partition_tree import DistributedNode
-from partition_tree import DistributedTree
-from partition_tree import NodeStatus
-from partition_tree import NodeSolvedReason
-from control_message import ControlMessage
+
 from coordinator import CoordinatorStatus
+from partition_tree import NodeStatus
+from partition_tree import DistributedNode, DistributedTree
+from control_message import ControlMessage
 
 class CoordinatorInfo:
     def __init__(self, rank, start_time):
@@ -134,7 +132,7 @@ class Leader:
     
     # solver original task with base solver
     def solve_original_task(self):
-        logging.debug('solve_original_task()')
+        # logging.debug('solve_original_task()')
         # run original task
         cmd =  [self.solver_path,
                 self.input_file_path

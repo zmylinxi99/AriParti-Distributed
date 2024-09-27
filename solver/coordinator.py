@@ -8,14 +8,10 @@ import json
 import traceback
 from datetime import datetime
 from mpi4py import MPI
-from enum import Enum
-from enum import auto
+from enum import Enum, auto
 
-from partition_tree import ParallelTree
-from partition_tree import ParallelNode
-from partition_tree import NodeStatus
-from partition_tree import NodeStatus
-from partition_tree import NodeSolvedReason
+from partition_tree import ParallelNode, ParallelTree
+from partition_tree import NodeStatus, NodeReason
 
 from control_message import ControlMessage
 from partitioner import Partitioner
@@ -152,12 +148,12 @@ class Coordinator:
                 node = self.tree.make_node(pid, ppid)
                 if op.is_new_unsat_node():
                     self.tree.node_solved_unsat(node,
-                            NodeSolvedReason.partitioner)
+                            NodeReason.partitioner)
                     if self.is_done():
                         return
                 elif node.parent != None and node.parent.status.is_unsat():
                     self.tree.node_solved_unsat(node,
-                            NodeSolvedReason.ancester)
+                            NodeReason.ancester)
                 else:
                     self.tree.waitings.append(node)
                 self.log_tree_infos()
@@ -299,9 +295,11 @@ class Coordinator:
     def log_tree_infos(self):
         logging.debug(f'nodes: {self.tree.get_node_number()}, '
                       f'solvings: {self.tree.get_solving_number()}({self.available_cores}), '
-                      f'solved: {self.tree.solved_number}(itself), '
-                      f'{self.tree.unsat_by_children_number}(children), '
-                      f'{self.tree.unsat_by_ancestor_number}(ancestor)'
+                      f'solved: {self.tree.update_dict.get((NodeStatus.unsat, NodeReason.itself), 0)}(itself), '
+                      f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.children), 0)}(children), '
+                      f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.ancester), 0)}(ancester), '
+                      f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.partitioner), 0)}(partitioner), '
+                      f'progress: {self.tree.root.unsat_percent * 100.0:.2f}%'
                     #   f'endeds: {self.tree.get_ended_number()}, '
                     #   f'unendeds: {self.tree.get_unended_number()}'
                 )
@@ -370,16 +368,10 @@ class Coordinator:
             self.receive_message_from_partitioner()
             if self.is_done():
                 return True
-        # logging.debug('before check_solvings_status()')
-        # self.log_tree_infos()
         if self.check_solvings_status():
             self.tree.log_display()
             return True
-        # logging.debug('before run_waiting_tasks()')
-        # self.log_tree_infos()
         self.run_waiting_tasks()
-        # logging.debug('after run_waiting_tasks()')
-        # self.log_tree_infos()
         return False
     
     def select_split_node(self):
@@ -529,6 +521,6 @@ class Coordinator:
             self.solve()
         except Exception as e:
             # print(f'Coordinator-{self.rank} Exception: {e}')
-            logging.info(f'Coordinator-{self.rank} Exception: {e}')
-            logging.info(f'Traceback: {traceback.format_exc()}')
+            logging.error(f'Coordinator-{self.rank} Exception: {e}')
+            logging.error(f'{traceback.format_exc()}')
             MPI.COMM_WORLD.Abort()

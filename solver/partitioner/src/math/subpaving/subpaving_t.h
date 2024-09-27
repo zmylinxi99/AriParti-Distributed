@@ -458,12 +458,14 @@ public:
         unsigned m_deg; // max degree
         unsigned m_occ; // occurrence
         numeral m_width;
+        bool m_is_too_short;
 
         unsigned_vector m_key_rank;
         numeral_manager & m_nm;
 
         var_info(numeral_manager & _nm) : 
-            m_nm(_nm) {
+            m_nm(_nm),
+            m_is_too_short(false) {
             m_nm.set(m_width, 0);
         }
         
@@ -510,6 +512,8 @@ public:
 
         // lhs less than rhs means lhs is a better choice
         bool operator< (const var_info & rhs) const {
+            if (m_is_too_short != rhs.m_is_too_short)
+                return rhs.m_is_too_short;
             for (unsigned i : m_key_rank) {
                 if (!key_eq(i, rhs))
                     return key_lt(i, rhs);
