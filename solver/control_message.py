@@ -37,6 +37,8 @@ class ControlMessage:
         split_failed = auto()
         # coordinator [src] solved the assigned node
         notify_result = auto()
+        # pre-partiitoning done
+        pre_partition_done = auto()
         
         def is_split_succeed(self):
             return self == ControlMessage.C2L.split_succeed
@@ -46,6 +48,9 @@ class ControlMessage:
         
         def is_notify_result(self):
             return self == ControlMessage.C2L.notify_result
+        
+        def is_pre_partition_done(self):
+            return self == ControlMessage.C2L.pre_partition_done
     
     # Coordinator To Coordinator
     class C2C(Enum):

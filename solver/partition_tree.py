@@ -137,8 +137,8 @@ class ParallelNode(PartitionNode):
         return True
     
     def update_unsat_percent(self):
-        self.unsat_percent = sum(child.unsat_percent for child in self.children)
-        
+        self.unsat_percent = sum(child.unsat_percent for child in self.children) / 2.0
+    
     def __str__(self) -> str:
         ret = super().__str__()
         ret += f'unsat_percent: {self.unsat_percent}, pid: {self.pid}\n'
@@ -250,21 +250,8 @@ class ParallelTree(PartitionTree):
         if node.parent != None:
             self.terminate_split_path(node.parent)
     
-    # def terminate_split_children(self, node: ParallelNode):
-    #     self.terminate_by_split(node)
-    #     for child in node.children:
-    #         self.terminate_split_children(child)
-    
-    # def perform_split(self, node: ParallelNode):
-    #     self.update_node_status(node,
-    #             NodeStatus.unsat,
-    #             NodeReason.split)
-    #     if node.parent != None:
-    #         self.unsat_push_up(node.parent)
-    
     def set_node_split(self, node: ParallelNode, assigned_coord: int):
         self.terminate_split_path(node)
-        # self.terminate_split_children(node)
         node.assigned_coord = assigned_coord
         self.node_solved_unsat(node, NodeReason.split)
     
@@ -366,8 +353,7 @@ class ParallelTree(PartitionTree):
             node: ParallelNode,
             reason: NodeReason):
         self.update_node_status(node,
-                NodeStatus.sat,
-                reason)
+                NodeStatus.sat, reason)
         self.result = NodeStatus.sat
     
     def node_solved(self, 

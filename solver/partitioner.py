@@ -37,7 +37,10 @@ class Partitioner:
     
     def is_running(self):
         return self.status.is_running()
-        
+    
+    def is_done(self):
+        return self.status.is_done()
+    
     # True for p finished
     def check_p_status(self):
         if not self.is_running():

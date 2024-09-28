@@ -6,6 +6,7 @@ import subprocess
 import shutil
 import json
 import traceback
+from collections import deque
 from datetime import datetime
 from mpi4py import MPI
 from enum import Enum, auto
@@ -38,6 +39,7 @@ class Coordinator:
         self.coordinator_start_time = time.time()
         self.rank = MPI.COMM_WORLD.Get_rank()
         self.leader_rank = MPI.COMM_WORLD.Get_size() - 1
+        self.num_coords = self.leader_rank
         self.init_params()
         
         self.temp_folder_path = f'{self.temp_folder_path}/Coordinator-{self.rank}'
@@ -163,25 +165,25 @@ class Coordinator:
         
     def receive_message_from_partitioner(self):
         is_done = self.partitioner.check_p_status()
-        # for _ in range(self.available_cores):
-        # for _ in range(16):
-        cnt = 0
+        if not is_done:
+            cnt = 0
         while True:
-            if not is_done and cnt >= 16:
-                break
-            cnt += 1
+            if not is_done:
+                if cnt >= 16:
+                    break
+                cnt += 1
             msg = self.partitioner.receive_message()
             if msg == None or msg == b'':
                 break
             msg = msg.strip(' \n')
             logging.debug(f'partitioner-message {msg}')
             self.process_partitioner_msg(msg)
-            if self.partitioner.status.is_done():
+            if self.partitioner.is_done():
                 break
             # if self.is_done():
             #     break
         if is_done:
-            assert(self.partitioner.status.is_done())
+            assert(self.partitioner.is_done())
     
     ### TBD ###
     # def need_terminate(self, t: Task):
@@ -320,7 +322,7 @@ class Coordinator:
         cmd =  [self.partitioner_path,
                 f'{self.solving_folder_path}/task-root.smt2',
                 f'-outputdir:{self.solving_folder_path}',
-                f'-partmrt:{self.available_cores}'
+                f'-partmrt:{max(self.available_cores, self.num_coords)}'
             ]
         logging.debug(f'exec-command {" ".join(cmd)}')
         p = subprocess.Popen(
@@ -333,7 +335,7 @@ class Coordinator:
         self.partitioner = Partitioner(p)
     
     def terminate_partitioner(self):
-        if self.partitioner.status.is_running():
+        if self.partitioner.is_running():
             self.partitioner.p.terminate()
     
     def start_solving(self):
@@ -389,7 +391,48 @@ class Coordinator:
         assert(isinstance(msg_type, ControlMessage.L2C))
         assert(msg_type.is_assign_node())
         self.start_solving()
-        ### TBD ###
+    
+    def pre_partition(self):
+        subnodes = deque()
+        while True:
+            self.receive_message_from_partitioner()
+            if self.is_done():
+                return True
+            if self.partitioner.is_done():
+                break
+            if len(subnodes) == 0:
+                if self.tree.root != None:
+                    assert(self.tree.root.status.is_unsolved())
+                    subnodes.append(self.tree.root)
+            if len(subnodes) > 0:
+                while len(subnodes) < self.num_coords:
+                    node: ParallelNode = subnodes[0]
+                    if len(node.children) < 2:
+                        break
+                    subnodes.popleft()
+                    for child in node.children:
+                        if child.status.is_unsolved():
+                            subnodes.append(child)
+                    
+            if len(subnodes) >= self.num_coords:
+                break
+            if self.get_coordinator_time() > 2.0:
+                break
+            time.sleep(0.01)
+        
+        pp_num_nodes = len(subnodes)
+        assert(pp_num_nodes > 0)
+        MPI.COMM_WORLD.send(ControlMessage.C2L.pre_partition_done,
+                            dest=self.leader_rank, tag=1)
+        MPI.COMM_WORLD.send(pp_num_nodes, 
+                            dest=self.leader_rank, tag=2)
+        for i in range(1, pp_num_nodes):
+            node = subnodes[i]
+            self.split_node = node
+            self.set_node_split(node, i)
+            logging.debug(f'split node-{self.split_node.id} to coordinater-{i}')
+            self.send_split_node_to_coordinator(i)
+        return False
     
     def receive_node_from_coordinator(self, coord_rank):
         solving_folder_path = f'{self.temp_folder_path}/tasks/round-{self.solving_round}'
@@ -447,10 +490,8 @@ class Coordinator:
         
     def process_transfer_message(self):
         target_rank = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=2)
-        # node: ParallelNode = self.split_node
         logging.debug(f'split node-{self.split_node.id} to coordinater-{target_rank}')
         self.send_split_node_to_coordinator(target_rank)
-        # self.tree.perform_split(node)
     
     def round_clean_up(self):
         assert(self.partitioner != None)
@@ -470,32 +511,33 @@ class Coordinator:
             self.round_clean_up()
         shutil.rmtree(self.temp_folder_path)
 
+    def solving_round_done(self):
+        self.send_result_to_leader()
+        self.round_clean_up()
+        self.status = CoordinatorStatus.idle
+        self.solving_round += 1
+        logging.debug(f'round-{self.solving_round} is done')
+    
     def solve(self):
         if self.rank == 0:
             self.solve_leader_root()
+            if self.pre_partition():
+                self.solving_round_done()
         while True:
-            # print('coordinator loop')
             if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
                 msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
                 assert(isinstance(msg_type, ControlMessage.L2C))
                 logging.debug(f'receive {msg_type} message from leader')
                 if msg_type.is_request_split():
                     # split a subnode
-                    ### TBD ###
-                    # assert(self.status.is_solving())
                     self.process_split_message()
-                    logging.debug(f'split done')
                 elif msg_type.is_transfer_node():
                     # transfer the split node to coordinator {target_rank}
-                    ### TBD ###
-                    # assert(self.status.is_solving())
                     self.process_transfer_message()
-                    logging.debug(f'transfer done')
                 elif msg_type.is_assign_node():
                     # solve node from coordinator {rank}
                     assert(self.status.is_idle())
                     self.process_assign_message()
-                    logging.debug(f'assign done')
                 elif msg_type.is_terminate_coordinator():
                     break
                 else:
@@ -503,11 +545,8 @@ class Coordinator:
             
             if self.status.is_solving():
                 if self.parallel_solving():
-                    self.send_result_to_leader()
-                    self.round_clean_up()
-                    self.status = CoordinatorStatus.idle
-                    self.solving_round += 1
-                    logging.debug(f'round-{self.solving_round} is done')
+                    self.solving_round_done()
+                
             ### TBD ###
             # if len(self.running_tasks) + self.base_run_cnt >= self.max_running_tasks \
             #     or (not self.need_communicate):
@@ -520,7 +559,6 @@ class Coordinator:
         try:
             self.solve()
         except Exception as e:
-            # print(f'Coordinator-{self.rank} Exception: {e}')
             logging.error(f'Coordinator-{self.rank} Exception: {e}')
             logging.error(f'{traceback.format_exc()}')
             MPI.COMM_WORLD.Abort()

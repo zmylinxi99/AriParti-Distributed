@@ -55,30 +55,22 @@ class Leader:
         self.split_tabu = 5.0
         # self.split_tabu_rate = 1.5
         
-        self.leader_rank = MPI.COMM_WORLD.Get_rank()
-        self.num_nodes = self.leader_rank
-        
-        self.init_params()
-        
         self.start_time = time.time()
         self.tree = DistributedTree(self.start_time)
+        self.leader_rank = MPI.COMM_WORLD.Get_rank()
+        self.num_coords = self.leader_rank
         
+        self.init_params()
         os.makedirs(self.temp_folder_path, exist_ok=True)
-        
-        # ##//linxi debug
-        # print(self.temp_folder_path)
-        # print(f'{self.output_folder_path}/log')
-        
         os.makedirs(self.output_folder_path, exist_ok=True)
-        
-        self.init_logging()
-        
-        logging.debug(f'num_nodes: {self.num_nodes}')
+
+        self.init_logging()        
+        logging.debug(f'num_coords: {self.num_coords}')
         logging.debug(f'leader_rank: {self.leader_rank}')
         logging.debug(f'temp_folder_path: {self.temp_folder_path}')
         
-        self.idle_coordinators = deque([i for i in range(1, self.num_nodes)])
-        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_nodes)]
+        self.idle_coordinators = deque([i for i in range(1, self.num_coords)])
+        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_coords)]
         self.next_split_rank = 0
         logging.debug(f'init done!')
     
@@ -176,18 +168,28 @@ class Leader:
         self.coordinators[coord_rank].node_solved()
         self.idle_coordinators.append(coord_rank)
     
+    def process_notified_result(self, src):
+        result = MPI.COMM_WORLD.recv(source=src, tag=2)
+        node = self.coordinators[src].assigned
+        logging.info(f'solved: node-{node.id} is {result}')
+        self.tree.node_partial_solved(node, result)
+        self.tree.log_display()
+        if self.is_done():
+            return True
+        self.set_coordinator_idle(src)
+        return False
+    
     def check_coordinators(self):
         msg_status = MPI.Status()
         while MPI.COMM_WORLD.Iprobe(source=MPI.ANY_SOURCE, tag=1, status=msg_status):
             src = msg_status.Get_source()
-            msg_type = MPI.COMM_WORLD.recv(source=src, tag=1)
-            assert(isinstance(msg_type, ControlMessage.C2L))
+            msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=src, tag=1)
             logging.debug(f'receive {msg_type} message from coordinator-{src}')
             if msg_type.is_split_succeed():
+                # split node {path} to coordinator {target_rank}
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
                 self.send_assign_message(src, target_rank)
                 self.send_transfer_message(src, target_rank)
-                # split node {path} to coordinator {target_rank}
                 self.update_split_assign_info(src, target_rank)
             elif msg_type.is_split_failed():
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
@@ -197,21 +199,11 @@ class Leader:
                     coord.status = CoordinatorStatus.solving
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
-                result = MPI.COMM_WORLD.recv(source=src, tag=2)
-                node = self.coordinators[src].assigned
-                logging.info(f'solved: node-{node.id} is {result}')
-                self.tree.node_partial_solved(node, result)
-                self.tree.log_display()
-                if self.is_done():
-                    return
-                self.set_coordinator_idle(src)
-            # elif msg_type.is_XXX:
-            #     # coordinator {src} report current solving info
-            #     ### TBD ###
-            #     # data = MPI.COMM_WORLD.recv(source=src, tag=2)
-            #     pass
+                if self.process_notified_result(src):
+                    return True
             else:
                 assert(False)
+            return False
     
     def check_original_task(self):
         p = self.original_process
@@ -232,7 +224,7 @@ class Leader:
         logging.info(f'solved-by-original {sta}')
 
     def assign_root_node(self):
-        logging.debug(f'assign_root_node()')
+        # logging.debug(f'assign_root_node()')
         target_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0'
         os.makedirs(target_path, exist_ok=True)
         shutil.copyfile(self.input_file_path, 
@@ -251,7 +243,7 @@ class Leader:
     def select_coordinator_to_split(self, skip_tabu: bool):
         # FIFO
         rank = self.next_split_rank
-        self.next_split_rank = (rank + 1) % self.num_nodes
+        self.next_split_rank = (rank + 1) % self.num_coords
         split_coord: CoordinatorInfo = self.coordinators[rank]
 
         if split_coord.status.is_solving() and \
@@ -299,19 +291,39 @@ class Leader:
         # assert(self.split_target[split_coord] == -1)
         # self.split_target[split_coord] = idle_coord
     
+    def pre_partition(self):
+        pp_num_nodes: int = MPI.COMM_WORLD.recv(source=0, tag=2)
+        for i in range(1, pp_num_nodes):
+            self.coordinators[0].status = CoordinatorStatus.splitting
+            self.send_assign_message(0, i)
+            self.update_split_assign_info(0, i)
+    
+    def setup_distributed_solving(self):
+        self.assign_root_node()
+        msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=0, tag=1)
+        if msg_type.is_pre_partition_done():
+            self.pre_partition()
+        elif msg_type.is_notify_result():
+            # coordinator {src} solved the assigned task
+            if self.process_notified_result(0):
+                return True
+        else:
+            assert(False)
+        return False
+    
     def solve(self):
         if self.solve_original_flag:
+            ### TBD ### process pre partition delay
             self.solve_original_task()
-        
-        self.assign_root_node()
+        if self.setup_distributed_solving():
+            return
         # communicate with coordinators
         while True:
             if self.solve_original_flag:
                 self.check_original_task()
                 if self.is_done():
                     return
-            self.check_coordinators()
-            if self.is_done():
+            if self.check_coordinators():
                 return
             if len(self.idle_coordinators) > 0:
                 self.assign_node_to_idle_coordinator()
@@ -320,7 +332,7 @@ class Leader:
                 raise TimeoutError()
     
     def terminate_coordinators(self):
-        for i in range(self.num_nodes):
+        for i in range(self.num_coords):
             MPI.COMM_WORLD.send(ControlMessage.L2C.terminate_coordinator,
                                 dest=i, tag=1)
     
@@ -335,9 +347,8 @@ class Leader:
         #     # logging.info(f'AssertionError: {ae}')
         except Exception as e:
             result = 'Exception'
-            # print(f'Leader Exception: {e}')
             logging.info(f'Leader Exception: {e}')
-            logging.info(f'Traceback: {traceback.format_exc()}')
+            logging.info(f'{traceback.format_exc()}')
             MPI.COMM_WORLD.Abort()
         else:
             status: NodeStatus = self.get_result()
