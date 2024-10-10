@@ -6,7 +6,6 @@ import time
 import string
 import random
 import subprocess
-import multiprocessing
 
 def generate_random_string(length):
     characters = string.ascii_letters + string.digits
@@ -34,7 +33,7 @@ def select_solver_for_logic(logic: str):
         assert(False)
 
 if __name__ == '__main__':
-    output_total_time = False
+    output_total_time = True
     
     if output_total_time:
         start_time = time.time()
@@ -57,30 +56,13 @@ if __name__ == '__main__':
     output_dir = request_directory
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
-    
-    # ##//linxi-test
-    # print(f'script_path: {script_path}')
-        
+            
     node_number = len(worker_node_ips)
-    host_core_number = multiprocessing.cpu_count()
 
     os.makedirs(output_dir, exist_ok=True)
-    
-    # logs_dir = f'{output_dir}/logs'
-    # if os.path.exists(logs_dir):
-    #     shutil.rmtree(logs_dir)
-
     temp_folder_name = generate_random_string(16)
-    
-    # ##//linxi-test
-    # temp_folder_name = 'ap-test'
-    # print(temp_folder_name)
-    
     temp_folder_path = f'/tmp/ap-files/{temp_folder_name}'
     os.makedirs(temp_folder_path, exist_ok=True)
-    
-    # ##//linxi-test
-    # print(temp_folder_path)
     
     # solving_time_limit = timeout_seconds - 10
     solving_time_limit = timeout_seconds

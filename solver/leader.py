@@ -50,10 +50,9 @@ class CoordinatorInfo:
 
 class Leader:
     def __init__(self):
-        self.solve_original_flag = False
         # self.solve_original_flag = False
-        self.split_tabu = 5.0
-        # self.split_tabu_rate = 1.5
+        self.solve_original_flag = True
+        self.split_tabu = 3.0
         
         self.start_time = time.time()
         self.tree = DistributedTree(self.start_time)
@@ -69,8 +68,9 @@ class Leader:
         logging.debug(f'leader_rank: {self.leader_rank}')
         logging.debug(f'temp_folder_path: {self.temp_folder_path}')
         
-        self.idle_coordinators = deque([i for i in range(1, self.num_coords)])
+        self.idle_coordinators = deque()
         self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_coords)]
+        ### TBD ### select split coordinator with priority
         self.next_split_rank = 0
         logging.debug(f'init done!')
     
@@ -124,13 +124,11 @@ class Leader:
     
     # solver original task with base solver
     def solve_original_task(self):
-        # logging.debug('solve_original_task()')
-        # run original task
         cmd =  [self.solver_path,
                 self.input_file_path
             ]
+        logging.debug('solve_original_task')
         logging.debug('exec-command {}'.format(' '.join(cmd)))
-        # print(" ".join(cmd))
         self.original_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -145,15 +143,11 @@ class Leader:
         return self.tree.get_result()
     
     def update_assign_coordinator(self, parent: DistributedNode, idle_coord: int):
-        child = self.tree.split_node_from(parent, idle_coord)
+        child = self.tree.split_node(parent, idle_coord)
         self.coordinators[idle_coord].assign_node(child)
     
     def update_split_coordinator(self, split_coord: int):
         self.coordinators[split_coord].split_node()
-    
-    # def update_split_tabu(self):
-    #     logging.debug(f'update split tabu: {self.split_tabu}s')
-    #     self.split_tabu *= self.split_tabu_rate
     
     def update_split_assign_info(self, split_coord: int, idle_coord: int):
         parent = self.coordinators[split_coord].assigned
@@ -162,7 +156,6 @@ class Leader:
         self.update_split_coordinator(split_coord)
         logging.info(f'split: (node-{self.coordinators[idle_coord].assigned.id} coordinator-{idle_coord}) '
                      f'from (node-{self.coordinators[split_coord].assigned.id} coordinator-{split_coord})')
-        # self.update_split_tabu()
     
     def set_coordinator_idle(self, coord_rank):
         self.coordinators[coord_rank].node_solved()
@@ -184,9 +177,9 @@ class Leader:
         while MPI.COMM_WORLD.Iprobe(source=MPI.ANY_SOURCE, tag=1, status=msg_status):
             src = msg_status.Get_source()
             msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=src, tag=1)
-            logging.debug(f'receive {msg_type} message from coordinator-{src}')
             if msg_type.is_split_succeed():
                 # split node {path} to coordinator {target_rank}
+                logging.debug(f'receive {msg_type} message from coordinator-{src}')
                 target_rank = MPI.COMM_WORLD.recv(source=src, tag=2)
                 self.send_assign_message(src, target_rank)
                 self.send_transfer_message(src, target_rank)
@@ -199,11 +192,12 @@ class Leader:
                     coord.status = CoordinatorStatus.solving
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
+                logging.debug(f'receive {msg_type} message from coordinator-{src}')
                 if self.process_notified_result(src):
                     return True
             else:
                 assert(False)
-            return False
+        return False
     
     def check_original_task(self):
         p = self.original_process
@@ -240,14 +234,14 @@ class Leader:
             return None
         return self.idle_coordinators.popleft()
     
-    def select_coordinator_to_split(self, skip_tabu: bool):
+    def select_coordinator_to_split(self):
         # FIFO
         rank = self.next_split_rank
         self.next_split_rank = (rank + 1) % self.num_coords
         split_coord: CoordinatorInfo = self.coordinators[rank]
 
         if split_coord.status.is_solving() and \
-           (skip_tabu or self.get_current_time() >= split_coord.last_split + self.split_tabu):
+           self.get_current_time() >= split_coord.last_split + self.split_tabu:
             return rank
         else:
             return None
@@ -271,32 +265,26 @@ class Leader:
                             dest=split_coord, tag=2)
     
     def assign_node_to_idle_coordinator(self):
-        # logging.debug('assign_node_to_idle_coordinator()')
         idle_coord = self.get_next_idle_coordinator()
         if idle_coord == None:
             return
-        if self.coordinators[idle_coord].solving_round == 0:
-            skip_tabu = True
-        else:
-            skip_tabu = False
-        split_coord = self.select_coordinator_to_split(skip_tabu)
+        split_coord = self.select_coordinator_to_split()
         if split_coord == None:
             self.idle_coordinators.append(idle_coord)
             return
-        # logging.info(f'idle_coord: {idle_coord}')
-        # logging.info(f'split_coord: {split_coord}')
-        logging.info(f'assign node from coordinator-{split_coord} to coordinator-{idle_coord}')
+        # logging.info(f'assign node from coordinator-{split_coord} to coordinator-{idle_coord}')
         self.coordinators[split_coord].status = CoordinatorStatus.splitting
         self.send_split_message(split_coord, idle_coord)
-        # assert(self.split_target[split_coord] == -1)
-        # self.split_target[split_coord] = idle_coord
     
     def pre_partition(self):
         pp_num_nodes: int = MPI.COMM_WORLD.recv(source=0, tag=2)
-        for i in range(1, pp_num_nodes):
-            self.coordinators[0].status = CoordinatorStatus.splitting
-            self.send_assign_message(0, i)
-            self.update_split_assign_info(0, i)
+        for i in range(1, self.num_coords):
+            if i < pp_num_nodes:
+                self.coordinators[0].status = CoordinatorStatus.splitting
+                self.send_assign_message(0, i)
+                self.update_split_assign_info(0, i)
+            else:
+                self.idle_coordinators.append(i)
     
     def setup_distributed_solving(self):
         self.assign_root_node()
@@ -325,8 +313,7 @@ class Leader:
                     return
             if self.check_coordinators():
                 return
-            if len(self.idle_coordinators) > 0:
-                self.assign_node_to_idle_coordinator()
+            self.assign_node_to_idle_coordinator()
             # time.sleep(0.01)
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()

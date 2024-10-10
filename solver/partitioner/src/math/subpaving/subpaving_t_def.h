@@ -2045,7 +2045,6 @@ void context_t<C>::init_partition() {
     
     m_alive_task_num = 0;
     m_var_key_num = 5;
-    m_unconvert_head = 0;
 
     const params_ref &p = gparams::get_ref();
     m_output_dir = p.get_str("output_dir", "ERROR");
@@ -2308,8 +2307,7 @@ void context_t<C>::convert_node_to_task(node * n) {
 }
 
 template<typename C>
-void context_t<C>::collect_task_var_info(node * n) {
-    convert_node_to_task(n);
+void context_t<C>::collect_task_var_info() {
     task_info & task = *m_ptask;
     unsigned nv = num_vars();
     SASSERT(nv > 0);
@@ -2384,14 +2382,14 @@ void context_t<C>::collect_task_var_info(node * n) {
             UNREACHABLE();
         }
     }
-    m_ptask->reset();
 }
 
 template<typename C>
 void context_t<C>::select_best_var(node * n) {
-    collect_task_var_info(n);
+    collect_task_var_info();
     m_best_var_info.m_id = null_var;
     m_curr_var_info.m_key_rank.reserve(m_var_key_num);
+    
     for (unsigned i = 0; i < m_var_key_num; ++i) {
         m_curr_var_info.m_key_rank[i] = n->key_rank()[i];
     }
@@ -2543,11 +2541,11 @@ void context_t<C>::parse_line(const std::string & line) {
         unsigned id;
         ss >> id;
         if (m_nodes_state[id] == node_state::WAITING) {
-            m_nodes_state[id] = node_state::TERMINATED;
             {
                 m_temp_stringstream << "node-" << id << " is terminated";
                 write_debug_ss_line_to_master();
             }
+            m_nodes_state[id] = node_state::TERMINATED;
             --m_alive_task_num;
         }
     }
@@ -2585,38 +2583,10 @@ typename context_t<C>::node * context_t<C>::select_next_node() {
     // return m_leaf_tail; // fifo
     // if (m_leaf_heap.empty())
     //     return nullptr;
-    SASSERT(!m_leaf_heap.empty());
+    // SASSERT(!m_leaf_heap.empty());
     unsigned nid = m_leaf_heap.top().m_id;
     m_leaf_heap.pop();
     return m_nodes[nid];
-}
-
-template<typename C>
-typename context_t<C>::node * context_t<C>::select_split_node() {
-    while (true) {
-        checkpoint();
-        if (m_leaf_head == nullptr)
-            break;
-        node * n = select_next_node();
-        TRACE("subpaving_main", tout << "selected node: #" << n->id() << ", depth: " << n->depth() << "\n";);
-        remove_from_leaf_dlist(n);
-        if (n->inconsistent()) {
-            // if (m_nodes_state[n->id()] != node_state::UNSAT) {
-            //     write_debug_line_to_master("partitioner-error n->inconsistent()");
-            //     // SASSERT(false);
-            // }
-            m_nodes_state[n->id()] = node_state::UNSAT;
-            continue;
-        }
-        if (m_nodes_state[n->id()] != node_state::WAITING)
-            continue;
-        if (n->parent() != nullptr && m_nodes_state[n->parent()->id()] == node_state::UNSAT) {
-            m_nodes_state[n->id()] = node_state::UNSAT;
-            continue;
-        }
-        return n;
-    }
-    return nullptr;
 }
 
 template<typename C>
@@ -2642,6 +2612,7 @@ void context_t<C>::split_node(node * n) {
             tout << "\n";
     );
     ++m_var_split_cnt[id];
+
     node * left   = this->mk_node(n);
     node * right  = this->mk_node(n);
     bound * lower = n->lower(id);
@@ -2707,6 +2678,10 @@ void context_t<C>::split_node(node * n) {
         remove_from_leaf_dlist(left);
         m_nodes_state[left->id()] = node_state::UNSAT;
     }
+    else {
+        m_leaf_heap.emplace(left->id(), m_ptask->m_depth, 
+            m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
+    }
 
     m_queue.push_back(rb);
     propagate(right);
@@ -2718,21 +2693,26 @@ void context_t<C>::split_node(node * n) {
         remove_from_leaf_dlist(right);
         m_nodes_state[right->id()] = node_state::UNSAT;
     }
+    else {
+        m_leaf_heap.emplace(right->id(), m_ptask->m_depth, 
+            m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
+    }
 }
 
 template<typename C>
 bool context_t<C>::create_new_task() {
     TRACE("subpaving_stats", statistics st; collect_statistics(st); tout << "statistics:\n"; st.display_smt2(tout););
     TRACE("subpaving_main", display_params(tout););
-
-    unsigned sz = m_nodes.size();
-    while (m_unconvert_head < sz) {
-        node * n = m_nodes[m_unconvert_head];
-        ++m_unconvert_head;
+    
+    while (true) {
+        if (m_leaf_heap.empty())
+            break;
+        node * n = select_next_node();
         TRACE("subpaving_main", tout << "selected node: #" << n->id() << ", depth: " << n->depth() << "\n";);
-        if (n->inconsistent())
+        if (n->inconsistent()) {
             m_nodes_state[n->id()] = node_state::UNSAT;
-        
+            continue;
+        }
         if (m_nodes_state[n->id()] != node_state::WAITING)
             continue;
         if (n->parent() != nullptr && m_nodes_state[n->parent()->id()] == node_state::UNSAT) {
@@ -2742,12 +2722,9 @@ bool context_t<C>::create_new_task() {
         TRACE("subpaving_main", tout << "node #" << n->id() << " after propagation\n";
                 display_bounds(tout, n););
         convert_node_to_task(n);
-        m_leaf_heap.emplace(m_ptask->m_node_id, m_ptask->m_depth, 
-            m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
-        
         {
             m_temp_stringstream << "alive tasks: "<< m_alive_task_num
-                << "(" << m_max_alive_tasks << "), nodes: " << sz;
+                << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
             write_debug_ss_line_to_master();
         }
         return true;
@@ -2773,8 +2750,8 @@ lbool context_t<C>::operator()() {
             remove_from_leaf_dlist(m_root);
             return l_false;
         }
+        m_leaf_heap.emplace(0, 0, 0, 0);
     }
-    
     if (m_ptask->m_node_id != UINT32_MAX) {
         ++m_alive_task_num;
         node * pa = m_nodes[m_ptask->m_node_id]->parent();
@@ -2784,26 +2761,24 @@ lbool context_t<C>::operator()() {
         m_temp_stringstream << control_message::P2C::new_unknown_node 
                             << " " << m_ptask->m_node_id << " " << pid;
         write_ss_line_to_master();
+        split_node(m_nodes[m_ptask->m_node_id]);
         m_ptask->reset();
     }
-    
+
     while (true) {
         communicate_with_master();
         if (m_alive_task_num > m_max_alive_tasks) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
-        if (create_new_task())
+        if (create_new_task()) {
             return l_true;
-        node * n = select_split_node();
-        if (n == nullptr) {
+        }
+        else {
             if (m_alive_task_num > 0)
                 return l_undef;
             else
                 return l_false;
-        }
-        else {
-            split_node(n);
         }
     }
 

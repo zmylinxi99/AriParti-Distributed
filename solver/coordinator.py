@@ -19,12 +19,16 @@ from partitioner import Partitioner
 
 class CoordinatorStatus(Enum):
     idle = auto()
+    waiting = auto()
     solving = auto()
     splitting = auto()
     
     def is_idle(self):
         return self == CoordinatorStatus.idle
 
+    def is_waiting(self):
+        return self == CoordinatorStatus.waiting
+    
     def is_solving(self):
         return self == CoordinatorStatus.solving
     
@@ -173,9 +177,11 @@ class Coordinator:
                     break
                 cnt += 1
             msg = self.partitioner.receive_message()
-            if msg == None or msg == b'':
+            if msg == None:
                 break
             msg = msg.strip(' \n')
+            if msg == '':
+                break
             logging.debug(f'partitioner-message {msg}')
             self.process_partitioner_msg(msg)
             if self.partitioner.is_done():
@@ -232,6 +238,8 @@ class Coordinator:
         self.partitioner.send_message(msg)
     
     def sync_ended_to_partitioner(self):
+        if self.partitioner.check_p_status():
+            return
         for unsync in self.tree.unsyncs:
             unsync: ParallelNode
             if unsync.status.is_unsat():
@@ -421,7 +429,7 @@ class Coordinator:
             time.sleep(0.01)
         
         pp_num_nodes = len(subnodes)
-        assert(pp_num_nodes > 0)
+        # assert(pp_num_nodes > 0)
         MPI.COMM_WORLD.send(ControlMessage.C2L.pre_partition_done,
                             dest=self.leader_rank, tag=1)
         MPI.COMM_WORLD.send(pp_num_nodes, 
@@ -474,7 +482,6 @@ class Coordinator:
     def process_split_message(self):
         # split a subnode and assign to coordinator {target_rank}
         target_rank = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=2)
-        logging.debug(f'split target rank: {target_rank}')
         if self.status.is_idle():
             self.send_split_failed_to_leader(target_rank)
             return
@@ -482,8 +489,8 @@ class Coordinator:
         if node == None:
             self.send_split_failed_to_leader(target_rank)
             return
+        logging.debug(f'split target rank: {target_rank}')
         logging.debug(f'split node: {node}')
-        # self.tree.log_display()
         self.send_split_succeed_to_leader(target_rank)
         self.split_node = node
         self.set_node_split(node, target_rank)
@@ -527,7 +534,7 @@ class Coordinator:
             if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
                 msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
                 assert(isinstance(msg_type, ControlMessage.L2C))
-                logging.debug(f'receive {msg_type} message from leader')
+                # logging.debug(f'receive {msg_type} message from leader')
                 if msg_type.is_request_split():
                     # split a subnode
                     self.process_split_message()

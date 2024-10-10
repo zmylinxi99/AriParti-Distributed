@@ -187,8 +187,9 @@ class ParallelTree(PartitionTree):
             # else:
             #     assert(False)
         elif status.is_terminated():
-            if reason == NodeReason.coordinator:
-                self.sync_to_partitioner(node)
+            self.sync_to_partitioner(node)
+            # if reason == NodeReason.coordinator:
+            #     self.sync_to_partitioner(node)
     
     # pid: id in partitioner
     # ppid: parent id in partitioner
@@ -339,13 +340,11 @@ class ParallelTree(PartitionTree):
         self.update_node_status(node,
                 NodeStatus.unsat,
                 reason)
-            
         if node.parent != None:
             self.unsat_push_up(node.parent)
         if self.root.status.is_unsat():
             self.result = NodeStatus.unsat
             return
-        self.update_node_unsat_percent(node)
         for child in node.children:
             self.unsat_push_down(child)
     
@@ -458,7 +457,7 @@ class DistributedTree(PartitionTree):
         self.root.assign_to = 0
 
     # split node from {parent} to {coord_id}
-    def split_node_from(self, parent: DistributedNode, coord_id: int):
+    def split_node(self, parent: DistributedNode, coord_id: int):
         ret = self.make_node(parent)
         ret.assign_to = coord_id
         return ret

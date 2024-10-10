@@ -637,7 +637,6 @@ private:
     // ptr_vector<node>    m_alive_tasks;
     
     ptr_vector<node>    m_nodes;
-    unsigned            m_unconvert_head;
     // bool_vector         m_is_alive;
 
     enum node_state {
@@ -904,7 +903,7 @@ private:
     /**
        \brief Collect variable informatiion in current node by dp.
     */
-    void collect_task_var_info(node * n);
+    void collect_task_var_info();
     
     void select_best_var(node * n);
 
@@ -937,8 +936,6 @@ private:
     void communicate_with_master();
 
     node * select_next_node();
-    
-    node * select_split_node();
     
     bool create_new_task();
 

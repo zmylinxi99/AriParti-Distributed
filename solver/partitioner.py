@@ -50,7 +50,7 @@ class Partitioner:
             return False
         if rc != 0:
             out_data, err_data = self.p.communicate()
-            logging.error('Partitioner Crashed! return code: {rc}')
+            logging.error(f'Partitioner Crashed! return code: {rc}')
             logging.error(f'output: {out_data}')
             logging.error(f'error: {err_data}')
             assert(False)
