@@ -13,8 +13,7 @@ from enum import Enum, auto
 
 from partition_tree import ParallelNode, ParallelTree
 from partition_tree import NodeStatus, NodeReason
-
-from control_message import ControlMessage
+from control_message import TerminateMessage, ControlMessage
 from partitioner import Partitioner
 
 class CoordinatorStatus(Enum):
@@ -379,7 +378,7 @@ class Coordinator:
             if self.is_done():
                 return True
         if self.check_solvings_status():
-            self.tree.log_display()
+            # self.tree.log_display()
             return True
         self.run_waiting_tasks()
         return False
@@ -393,8 +392,8 @@ class Coordinator:
         self.sync_ended_to_partitioner()
     
     def solve_leader_root(self):
-        while not MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
-            time.sleep(0.01)
+        # while not MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
+        #     time.sleep(0.01)
         msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
         assert(isinstance(msg_type, ControlMessage.L2C))
         assert(msg_type.is_assign_node())
@@ -403,6 +402,7 @@ class Coordinator:
     def pre_partition(self):
         subnodes = deque()
         while True:
+            self.receive_message_from_leader()
             self.receive_message_from_partitioner()
             if self.is_done():
                 return True
@@ -434,13 +434,20 @@ class Coordinator:
                             dest=self.leader_rank, tag=1)
         MPI.COMM_WORLD.send(pp_num_nodes, 
                             dest=self.leader_rank, tag=2)
-        for i in range(1, pp_num_nodes):
-            node = subnodes[i]
-            self.split_node = node
-            self.set_node_split(node, i)
-            logging.debug(f'split node-{self.split_node.id} to coordinater-{i}')
-            self.send_split_node_to_coordinator(i)
-        return False
+        msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
+        assert(isinstance(msg_type, ControlMessage.L2C))
+        if msg_type.is_assign_node():
+            for i in range(1, pp_num_nodes):
+                node = subnodes[i]
+                self.split_node = node
+                self.set_node_split(node, i)
+                logging.debug(f'split node-{self.split_node.id} to coordinater-{i}')
+                self.send_split_node_to_coordinator(i)
+            return False
+        elif msg_type.is_terminate_coordinator():
+            raise TerminateMessage()
+        else:
+            assert(False)
     
     def receive_node_from_coordinator(self, coord_rank):
         solving_folder_path = f'{self.temp_folder_path}/tasks/round-{self.solving_round}'
@@ -463,8 +470,6 @@ class Coordinator:
                             dest=self.leader_rank, tag=2)
     
     def send_split_node_to_coordinator(self, target_rank):
-        # MPI.COMM_WORLD.send(ControlMessage.C2C.send_subnode,
-        #             dest=target_rank, tag=1)
         ### pid!!!
         instance_path = f'{self.solving_folder_path}/task-{self.split_node.pid}.smt2'
         logging.debug(f'split task path: {instance_path}')
@@ -525,31 +530,36 @@ class Coordinator:
         self.solving_round += 1
         logging.debug(f'round-{self.solving_round} is done')
     
+    # True for terminate
+    def receive_message_from_leader(self):
+        if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
+            msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
+            assert(isinstance(msg_type, ControlMessage.L2C))
+            # logging.debug(f'receive {msg_type} message from leader')
+            if msg_type.is_request_split():
+                # split a subnode
+                self.process_split_message()
+            elif msg_type.is_transfer_node():
+                # transfer the split node to coordinator {target_rank}
+                self.process_transfer_message()
+            elif msg_type.is_assign_node():
+                # solve node from coordinator {rank}
+                assert(self.status.is_idle())
+                self.process_assign_message()
+            elif msg_type.is_terminate_coordinator():
+                if self.tree != None:
+                    self.tree.log_display()
+                raise TerminateMessage()
+            else:
+                assert(False)
+    
     def solve(self):
         if self.rank == 0:
             self.solve_leader_root()
             if self.pre_partition():
                 self.solving_round_done()
         while True:
-            if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
-                msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
-                assert(isinstance(msg_type, ControlMessage.L2C))
-                # logging.debug(f'receive {msg_type} message from leader')
-                if msg_type.is_request_split():
-                    # split a subnode
-                    self.process_split_message()
-                elif msg_type.is_transfer_node():
-                    # transfer the split node to coordinator {target_rank}
-                    self.process_transfer_message()
-                elif msg_type.is_assign_node():
-                    # solve node from coordinator {rank}
-                    assert(self.status.is_idle())
-                    self.process_assign_message()
-                elif msg_type.is_terminate_coordinator():
-                    break
-                else:
-                    assert(False)
-            
+            self.receive_message_from_leader()
             if self.status.is_solving():
                 if self.parallel_solving():
                     self.solving_round_done()
@@ -560,12 +570,14 @@ class Coordinator:
             #     time.sleep(0.01)
             
             # time.sleep(0.01)
-        self.clean_up()
     
     def __call__(self):
         try:
             self.solve()
+        except TerminateMessage:
+            logging.info(f'Coordinator-{self.rank} is Terminated by Leader')
         except Exception as e:
             logging.error(f'Coordinator-{self.rank} Exception: {e}')
             logging.error(f'{traceback.format_exc()}')
             MPI.COMM_WORLD.Abort()
+        self.clean_up()

@@ -1,5 +1,9 @@
 from enum import Enum, auto
 
+class TerminateMessage(Exception):
+    def __str__(self):
+        return 'Terminate by Leader'
+
 class ControlMessage:
     # Leader To Coordinator
     class L2C(Enum):

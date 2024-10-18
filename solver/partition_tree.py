@@ -154,8 +154,8 @@ class ParallelTree(PartitionTree):
         
         self.total_solve_time = 0.0
         self.average_solve_time = 0.0
-        self.split_thres_max = 30.0
-        self.split_thres_min = 5.0
+        self.split_thres_max = 50.0
+        self.split_thres_min = 10.0
         
         super().__init__(start_time)
     
@@ -336,7 +336,6 @@ class ParallelTree(PartitionTree):
     def node_solved_unsat(self,
             node: ParallelNode,
             reason: NodeReason):
-                    
         self.update_node_status(node,
                 NodeStatus.unsat,
                 reason)
@@ -359,6 +358,7 @@ class ParallelTree(PartitionTree):
             node: ParallelNode,
             status: NodeStatus,
             reason: NodeReason = NodeReason.itself):
+        # logging.debug(f'node-{node.id} is solved: {status} by {reason} in {self.get_node_solving_time(node)}s')
         if status.is_sat():
             self.node_solved_sat(node, reason)
         elif status.is_unsat():

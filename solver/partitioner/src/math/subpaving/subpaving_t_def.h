@@ -2464,10 +2464,10 @@ bool context_t<C>::update_node_state_unsat(unsigned id) {
     if (m_nodes_state[id] == node_state::UNSAT)
         return true;
     if (m_nodes_state[id] == node_state::WAITING) {
-        {
-            m_temp_stringstream << "node-" << id << " is unsat";
-            write_debug_ss_line_to_master();
-        }
+        // {
+        //     m_temp_stringstream << "node-" << id << " is unsat";
+        //     write_debug_ss_line_to_master();
+        // }
         --m_alive_task_num;
     }
     m_nodes_state[id] = node_state::UNSAT;
@@ -2541,10 +2541,10 @@ void context_t<C>::parse_line(const std::string & line) {
         unsigned id;
         ss >> id;
         if (m_nodes_state[id] == node_state::WAITING) {
-            {
-                m_temp_stringstream << "node-" << id << " is terminated";
-                write_debug_ss_line_to_master();
-            }
+            // {
+            //     m_temp_stringstream << "node-" << id << " is terminated";
+            //     write_debug_ss_line_to_master();
+            // }
             m_nodes_state[id] = node_state::TERMINATED;
             --m_alive_task_num;
         }
@@ -2567,6 +2567,11 @@ void context_t<C>::communicate_with_master() {
         write_debug_line_to_master("read line from master: " + m_current_line);
         parse_line(m_current_line);
         m_current_line = "";
+        {
+            m_temp_stringstream << "alive tasks: "<< m_alive_task_num
+                << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
+            write_debug_ss_line_to_master();
+        }
         // m_current_line.clear();
     }
 }
@@ -2584,6 +2589,12 @@ typename context_t<C>::node * context_t<C>::select_next_node() {
     // if (m_leaf_heap.empty())
     //     return nullptr;
     // SASSERT(!m_leaf_heap.empty());
+    {
+        m_temp_stringstream << "[leaf heap top] node-" << m_leaf_heap.top().m_id
+            << ": depth=" << m_leaf_heap.top().m_depth << ", undef_clause_num=" << m_leaf_heap.top().m_undef_clause_num
+            << ", undef_lit_num=" << m_leaf_heap.top().m_undef_lit_num;
+        write_debug_ss_line_to_master();
+    }
     unsigned nid = m_leaf_heap.top().m_id;
     m_leaf_heap.pop();
     return m_nodes[nid];

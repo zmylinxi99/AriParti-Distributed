@@ -166,7 +166,7 @@ class Leader:
         node = self.coordinators[src].assigned
         logging.info(f'solved: node-{node.id} is {result}')
         self.tree.node_partial_solved(node, result)
-        self.tree.log_display()
+        # self.tree.log_display()
         if self.is_done():
             return True
         self.set_coordinator_idle(src)
@@ -203,7 +203,7 @@ class Leader:
         p = self.original_process
         rc = p.poll()
         if rc == None:
-            return
+            return False
         assert(rc == 0)
         out_data, err_data = p.communicate()
         sta : str = out_data.strip('\n').strip(' ')
@@ -213,9 +213,9 @@ class Leader:
             result = NodeStatus.unsat
         else:
             assert(False)
-        
         self.tree.original_solved(result)
         logging.info(f'solved-by-original {sta}')
+        return True
 
     def assign_root_node(self):
         # logging.debug(f'assign_root_node()')
@@ -278,6 +278,8 @@ class Leader:
     
     def pre_partition(self):
         pp_num_nodes: int = MPI.COMM_WORLD.recv(source=0, tag=2)
+        MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
+                    dest=0, tag=1)
         for i in range(1, self.num_coords):
             if i < pp_num_nodes:
                 self.coordinators[0].status = CoordinatorStatus.splitting
@@ -288,29 +290,30 @@ class Leader:
     
     def setup_distributed_solving(self):
         self.assign_root_node()
-        msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=0, tag=1)
-        if msg_type.is_pre_partition_done():
-            self.pre_partition()
-        elif msg_type.is_notify_result():
-            # coordinator {src} solved the assigned task
-            if self.process_notified_result(0):
+        while True:
+            if self.solve_original_flag and self.check_original_task():
                 return True
-        else:
-            assert(False)
-        return False
+            if MPI.COMM_WORLD.Iprobe(source=0, tag=1):
+                msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=0, tag=1)
+                if msg_type.is_pre_partition_done():
+                    self.pre_partition()
+                    return False
+                elif msg_type.is_notify_result():
+                    # coordinator {src} solved the assigned task
+                    if self.process_notified_result(0):
+                        return True
+                else:
+                    assert(False)
     
     def solve(self):
         if self.solve_original_flag:
-            ### TBD ### process pre partition delay
             self.solve_original_task()
         if self.setup_distributed_solving():
             return
         # communicate with coordinators
         while True:
-            if self.solve_original_flag:
-                self.check_original_task()
-                if self.is_done():
-                    return
+            if self.solve_original_flag and self.check_original_task():
+                return
             if self.check_coordinators():
                 return
             self.assign_node_to_idle_coordinator()
@@ -323,11 +326,18 @@ class Leader:
             MPI.COMM_WORLD.send(ControlMessage.L2C.terminate_coordinator,
                                 dest=i, tag=1)
     
+    def clean_up(self):
+        self.terminate_coordinators()
+        if self.solve_original_flag:
+            if self.original_process != None:
+                self.original_process.terminate()
+    
     def __call__(self):
         try:
             self.solve()
         except TimeoutError:
             result = 'timeout'
+            self.tree.log_display()
         # except AssertionError as ae:
         #     result = 'AssertionError'
         #     # print(f'AssertionError: {ae}')
@@ -345,6 +355,7 @@ class Leader:
                 result = 'unsat'
             else:
                 assert(False)
+            self.tree.log_display()
         
         end_time = time.time()
         execution_time = end_time - self.start_time
@@ -357,6 +368,5 @@ class Leader:
             with open(f'{self.output_folder_path}/result.txt', 'w') as f:
                 f.write(f'{result}\n{execution_time}\n')
         
-        self.terminate_coordinators()
-        ### TBD: Terminate and clean up ###
+        self.clean_up()
         # MPI.COMM_WORLD.Abort()
