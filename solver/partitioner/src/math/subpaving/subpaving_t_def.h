@@ -77,7 +77,7 @@ template<typename C>
 context_t<C>::node::node(context_t & s, unsigned id, bool_vector &is_bool):
     m_bm(s.bm()),
     m_bvm(s.bvm())
-    {
+{
     m_id              = id;
     m_depth           = 0;
     unsigned num_vars = s.num_vars();
@@ -104,7 +104,7 @@ template<typename C>
 context_t<C>::node::node(node * parent, unsigned id):
     m_bm(parent->m_bm),
     m_bvm(parent->m_bvm)
-{    
+{
     m_id             = id;
     m_depth          = parent->depth() + 1;
     bm().copy(parent->m_lowers, m_lowers);
@@ -792,38 +792,35 @@ typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
     node * r;
     if (parent == nullptr) {
         r = new (mem) node(*this, m_num_nodes, m_is_bool);
-
         for (unsigned i = 0; i < m_var_key_num; ++i)
             r->key_rank().push_back(i);
     }
     else {
         r = new (mem) node(parent, m_num_nodes);
-
         // dynamic key rank
-        unsigned pos = 0;
-        for (unsigned i = 0; i < m_var_key_num; ++i) {
-            r->key_rank().push_back(parent->key_rank()[i]);
-            if (i > 0 && pos == 0 && parent->key_rank()[i - 1] < parent->key_rank()[i])
-                pos = i;
-        }
-        if (pos == 0) {
-            for (unsigned i = 0; i < m_var_key_num; ++i)
-                r->key_rank()[i] = i;
-        }
-        else {
-            std::swap(r->key_rank()[pos - 1], r->key_rank()[pos]);
-        }
-        
+        // unsigned pos = 0;
+        // for (unsigned i = 0; i < m_var_key_num; ++i) {
+        //     r->key_rank().push_back(parent->key_rank()[i]);
+        //     if (i > 0 && pos == 0 && parent->key_rank()[i - 1] < parent->key_rank()[i])
+        //         pos = i;
+        // }
+        // if (pos == 0) {
+        //     for (unsigned i = 0; i < m_var_key_num; ++i)
+        //         r->key_rank()[i] = i;
+        // }
+        // else {
+        //     std::swap(r->key_rank()[pos - 1], r->key_rank()[pos]);
+        // }
         // static key rank
-        // for (unsigned i = 0; i < m_var_key_num; ++i)
-        //     r->key_rank().push_back(i);
+        for (unsigned i = 0; i < m_var_key_num; ++i)
+            r->key_rank().push_back(i);
     }
 
     // Add node in the leaf dlist
     push_front(r);
     ++m_num_nodes;
     m_nodes.push_back(r);
-    m_nodes_state.push_back(node_state::WAITING);
+    m_nodes_state.push_back(node_state::UNCONVERTED);
     return r;
 }
 
@@ -2143,13 +2140,12 @@ void context_t<C>::convert_node_to_task(node * n) {
         }
         if (skippable)
             continue;
-        ++task.m_undef_clause_num;
-        task.m_undef_lit_num += m_temp_atom_buffer.size();
-
         if (m_temp_atom_buffer.size() == 1) {
             temp_units.push_back(std::move(convert_atom_to_lit(m_temp_atom_buffer[0])));
         }
         else {
+            ++task.m_undef_clause_num;
+            task.m_undef_lit_num += m_temp_atom_buffer.size();
             vector<lit> lit_cla;
             for (unsigned j = 0, jsz = m_temp_atom_buffer.size(); j < jsz; ++j) {
                 atom * a = m_temp_atom_buffer[j];
@@ -2164,8 +2160,8 @@ void context_t<C>::convert_node_to_task(node * n) {
         if (m_defs[at->m_x] == nullptr)
             continue;
         temp_units.push_back(std::move(convert_atom_to_lit(at)));
-        ++task.m_undef_lit_num;
-        ++task.m_undef_clause_num;
+        // ++task.m_undef_clause_num;
+        // ++task.m_undef_lit_num;
     }
 
     for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
@@ -2173,8 +2169,8 @@ void context_t<C>::convert_node_to_task(node * n) {
         if (m_defs[at->m_x] == nullptr)
             continue;
         temp_units.push_back(std::move(convert_atom_to_lit(at)));
-        ++task.m_undef_lit_num;
-        ++task.m_undef_clause_num;
+        // ++task.m_undef_clause_num;
+        // ++task.m_undef_lit_num;
     }
 
     for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
@@ -2489,8 +2485,8 @@ void context_t<C>::unsat_push_down(node * n) {
 template<typename C>
 bool context_t<C>::can_propagate_unsat(node * n) {
     node * ch = n->first_child();
-    if (ch == nullptr)
-        return false;
+    // if (ch == nullptr)
+    //     return false;
     while (ch != nullptr) {
         if (m_nodes_state[ch->id()] != node_state::UNSAT)
             return false;
@@ -2572,7 +2568,6 @@ void context_t<C>::communicate_with_master() {
                 << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
             write_debug_ss_line_to_master();
         }
-        // m_current_line.clear();
     }
 }
 
@@ -2724,7 +2719,7 @@ bool context_t<C>::create_new_task() {
             m_nodes_state[n->id()] = node_state::UNSAT;
             continue;
         }
-        if (m_nodes_state[n->id()] != node_state::WAITING)
+        if (m_nodes_state[n->id()] != node_state::UNCONVERTED)
             continue;
         if (n->parent() != nullptr && m_nodes_state[n->parent()->id()] == node_state::UNSAT) {
             m_nodes_state[n->id()] = node_state::UNSAT;
@@ -2763,16 +2758,18 @@ lbool context_t<C>::operator()() {
         }
         m_leaf_heap.emplace(0, 0, 0, 0);
     }
-    if (m_ptask->m_node_id != UINT32_MAX) {
+    unsigned nid = m_ptask->m_node_id;
+    if (nid != UINT32_MAX) {
         ++m_alive_task_num;
-        node * pa = m_nodes[m_ptask->m_node_id]->parent();
+        node * pa = m_nodes[nid]->parent();
         int pid = -1;
         if (pa != nullptr)
             pid = static_cast<int>(pa->id());
         m_temp_stringstream << control_message::P2C::new_unknown_node 
-                            << " " << m_ptask->m_node_id << " " << pid;
+                            << " " << nid << " " << pid;
         write_ss_line_to_master();
-        split_node(m_nodes[m_ptask->m_node_id]);
+        m_nodes_state[nid] = node_state::WAITING;
+        split_node(m_nodes[nid]);
         m_ptask->reset();
     }
 

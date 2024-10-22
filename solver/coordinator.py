@@ -103,7 +103,7 @@ class Coordinator:
         
         self.available_cores: int = available_cores_list[self.rank]
         if self.rank == 0:
-            self.available_cores -= 2
+            self.available_cores -= 3
     
     def is_done(self):
         if self.result.is_solved():
@@ -470,7 +470,6 @@ class Coordinator:
                             dest=self.leader_rank, tag=2)
     
     def send_split_node_to_coordinator(self, target_rank):
-        ### pid!!!
         instance_path = f'{self.solving_folder_path}/task-{self.split_node.pid}.smt2'
         logging.debug(f'split task path: {instance_path}')
         with open(instance_path, 'br') as file:

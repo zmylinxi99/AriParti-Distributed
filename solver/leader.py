@@ -122,19 +122,31 @@ class Leader:
     def get_current_time(self):
         return time.time() - self.start_time
     
-    # solver original task with base solver
-    def solve_original_task(self):
+        # solver original task with base solver
+    def solve_task(self, task_path):
         cmd =  [self.solver_path,
-                self.input_file_path
+                task_path
             ]
-        logging.debug('solve_original_task')
+        
         logging.debug('exec-command {}'.format(' '.join(cmd)))
-        self.original_process = subprocess.Popen(
+        return subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
             )
+    
+    # solver original task with base solver
+    def solve_original_task(self):
+        logging.debug('solve_original_task')
+        self.original_process = self.solve_task(self.input_file_path)
+    
+    # solver simplified root task with base solver
+    def try_solve_simplified_root_task(self):
+        task_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0/task-0.smt2'
+        if os.path.exists(task_path):
+            logging.debug('solve_simplified_root_task')
+            self.simplified_process = self.solve_task(task_path)
     
     def is_done(self):
         return self.tree.is_done()
@@ -199,8 +211,7 @@ class Leader:
                 assert(False)
         return False
     
-    def check_original_task(self):
-        p = self.original_process
+    def check_process(self, p):
         rc = p.poll()
         if rc == None:
             return False
@@ -214,9 +225,17 @@ class Leader:
         else:
             assert(False)
         self.tree.original_solved(result)
-        logging.info(f'solved-by-original {sta}')
         return True
 
+    def check_original_task(self):
+        return self.check_process(self.original_process)
+    
+    def check_simplified_root_task(self):
+        if self.simplified_process == None:
+            self.try_solve_simplified_root_task()
+            return False
+        return self.check_process(self.simplified_process)
+    
     def assign_root_node(self):
         # logging.debug(f'assign_root_node()')
         target_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0'
@@ -291,8 +310,13 @@ class Leader:
     def setup_distributed_solving(self):
         self.assign_root_node()
         while True:
-            if self.solve_original_flag and self.check_original_task():
-                return True
+            if self.solve_original_flag:
+                if self.check_original_task():
+                    logging.info(f'solved-by-original {self.get_result()}')
+                    return True
+                if self.check_simplified_root_task():
+                    logging.info(f'solved-by-simplified {self.get_result()}')
+                    return True
             if MPI.COMM_WORLD.Iprobe(source=0, tag=1):
                 msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=0, tag=1)
                 if msg_type.is_pre_partition_done():
@@ -308,12 +332,18 @@ class Leader:
     def solve(self):
         if self.solve_original_flag:
             self.solve_original_task()
+            self.simplified_process = None
         if self.setup_distributed_solving():
             return
         # communicate with coordinators
         while True:
-            if self.solve_original_flag and self.check_original_task():
-                return
+            if self.solve_original_flag:
+                if self.check_original_task():
+                    logging.info(f'solved-by-original {self.get_result()}')
+                    return
+                if self.check_simplified_root_task():
+                    logging.info(f'solved-by-simplified {self.get_result()}')
+                    return
             if self.check_coordinators():
                 return
             self.assign_node_to_idle_coordinator()

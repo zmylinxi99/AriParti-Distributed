@@ -48,6 +48,7 @@ class Partitioner:
         rc = self.p.poll()
         if rc == None:
             return False
+        logging.info(f'Partitioner is finished! return code: {rc}')
         if rc != 0:
             out_data, err_data = self.p.communicate()
             logging.error(f'Partitioner Crashed! return code: {rc}')

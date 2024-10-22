@@ -479,9 +479,9 @@ public:
             case 0:
                 return m_split_cnt < rhs.m_split_cnt;
             case 1:
-                return m_cz && !rhs.m_cz;
-            case 2:
                 return m_deg > rhs.m_deg;
+            case 2:
+                return m_cz && !rhs.m_cz;
             case 3:
                 return m_occ > rhs.m_occ;
             case 4:
@@ -497,9 +497,9 @@ public:
             case 0:
                 return m_split_cnt == rhs.m_split_cnt;
             case 1:
-                return m_cz == rhs.m_cz;
-            case 2:
                 return m_deg == rhs.m_deg;
+            case 2:
+                return m_cz == rhs.m_cz;
             case 3:
                 return m_occ == rhs.m_occ;
             case 4:
@@ -511,7 +511,7 @@ public:
         }
 
         // lhs less than rhs means lhs is a better choice
-        bool operator< (const var_info & rhs) const {
+        bool operator < (const var_info & rhs) const {
             if (m_is_too_short != rhs.m_is_too_short)
                 return rhs.m_is_too_short;
             for (unsigned i : m_key_rank) {
@@ -640,6 +640,7 @@ private:
     // bool_vector         m_is_alive;
 
     enum node_state {
+        UNCONVERTED,
         WAITING,
         UNSAT,
         TERMINATED,
