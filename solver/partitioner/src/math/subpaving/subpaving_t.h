@@ -528,6 +528,7 @@ public:
             m_deg = rhs.m_deg;
             m_occ = rhs.m_occ;
             m_nm.set(m_width, rhs.m_width);
+            m_is_too_short = rhs.m_is_too_short;
         }
 
         std::string to_string() {
@@ -535,7 +536,9 @@ public:
             ss << "var info: id = " << m_id
                << ", split cnt = " << m_split_cnt
                << ", cz = " << m_cz << ", deg = " << m_deg
-               << ", occ = " << m_occ << ", width = ";
+               << ", occ = " << m_occ
+               << ", is too short = " << m_is_too_short
+               << ", width = ";
             m_nm.display(ss, m_width);
             return ss.str();
         }
@@ -603,6 +606,7 @@ private:
     //#linxi
     unsigned            m_max_propagate;
     unsigned            m_curr_propagate;
+    unsigned            m_root_max_prop_time;
     unsigned            m_max_prop_time;
 
     unsigned            m_var_key_num;

@@ -143,8 +143,9 @@ class Leader:
     
     # solver simplified root task with base solver
     def try_solve_simplified_root_task(self):
+        root_init_file = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0/task-0.done'
         task_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0/task-0.smt2'
-        if os.path.exists(task_path):
+        if os.path.exists(root_init_file):
             logging.debug('solve_simplified_root_task')
             self.simplified_process = self.solve_task(task_path)
     
@@ -217,12 +218,13 @@ class Leader:
             return False
         assert(rc == 0)
         out_data, err_data = p.communicate()
-        sta : str = out_data.strip('\n').strip(' ')
+        sta: str = out_data.strip('\n').strip(' ')
         if sta == 'sat':
             result = NodeStatus.sat
         elif sta == 'unsat':
             result = NodeStatus.unsat
         else:
+            logging.error(f'process error state: {sta}')
             assert(False)
         self.tree.original_solved(result)
         return True
@@ -361,6 +363,8 @@ class Leader:
         if self.solve_original_flag:
             if self.original_process != None:
                 self.original_process.terminate()
+            if self.simplified_process != None:
+                self.simplified_process.terminate()
     
     def __call__(self):
         try:
@@ -374,8 +378,8 @@ class Leader:
         #     # logging.info(f'AssertionError: {ae}')
         except Exception as e:
             result = 'Exception'
-            logging.info(f'Leader Exception: {e}')
-            logging.info(f'{traceback.format_exc()}')
+            logging.error(f'Leader Exception: {e}')
+            logging.error(f'{traceback.format_exc()}')
             MPI.COMM_WORLD.Abort()
         else:
             status: NodeStatus = self.get_result()

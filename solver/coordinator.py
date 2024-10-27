@@ -161,6 +161,10 @@ class Coordinator:
                             NodeReason.ancester)
                 else:
                     self.tree.waitings.append(node)
+                    if node.id == 0:
+                        root_init_file = f'{self.solving_folder_path}/task-0.done'
+                        with open(root_init_file, 'w') as file:
+                            file.write('done')
                 self.log_tree_infos()
                 ### TBD ###
             else:
@@ -424,7 +428,7 @@ class Coordinator:
                     
             if len(subnodes) >= self.num_coords:
                 break
-            if self.get_coordinator_time() > 2.0:
+            if self.get_coordinator_time() > 20.0:
                 break
             time.sleep(0.01)
         

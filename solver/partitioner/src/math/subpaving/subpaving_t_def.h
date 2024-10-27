@@ -1888,7 +1888,16 @@ void context_t<C>::propagate(node * n) {
     unsigned prop_start = static_cast<unsigned>(std::time(nullptr));
     while (!inconsistent(n) && m_qhead < m_queue.size()
             && m_curr_propagate < m_max_propagate
-            && static_cast<unsigned>(std::time(nullptr)) - prop_start <= 60) {
+            && static_cast<unsigned>(std::time(nullptr)) - prop_start <= m_max_prop_time) {
+        unsigned prop_time = static_cast<unsigned>(std::time(nullptr)) - prop_start;
+        if (n->id() == 0) {
+            if (prop_time > m_root_max_prop_time)
+                break;
+        }
+        else {
+            if (prop_time > m_max_prop_time)
+                break;
+        }
         checkpoint();
         bound * b = m_queue[m_qhead];
         m_qhead++;
@@ -2033,7 +2042,8 @@ void context_t<C>::init_partition() {
     else if (m_max_propagate < 256u)
         m_max_propagate = 256u;
     
-    m_max_prop_time = 60; // second
+    m_root_max_prop_time = 20;
+    m_max_prop_time = 10; // second
 
     m_ptask->reset();
     m_var_occs.resize(num_vars());
@@ -2400,14 +2410,15 @@ void context_t<C>::select_best_var(node * n) {
          && nm().eq(l->value(), u->value())) {
             continue;
         }
+        if (m_var_occs[x] == 0)
+            continue;
         m_curr_var_info.m_id = x;
         m_curr_var_info.m_split_cnt = m_var_split_cnt[x];
         m_curr_var_info.m_cz = ((l == nullptr || nm().is_neg(l->value())) 
                              && (u == nullptr || nm().is_pos(u->value())));
         m_curr_var_info.m_deg = m_var_max_deg[x];
         m_curr_var_info.m_occ = m_var_occs[x];
-        if (m_curr_var_info.m_occ == 0)
-            continue;
+        m_curr_var_info.m_is_too_short = false;
         numeral & width = m_curr_var_info.m_width;
         if (l == nullptr && u == nullptr) {
             nm().set(width, m_unbounded_penalty_sq);
