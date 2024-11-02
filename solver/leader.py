@@ -57,19 +57,20 @@ class Leader:
         self.start_time = time.time()
         self.tree = DistributedTree(self.start_time)
         self.leader_rank = MPI.COMM_WORLD.Get_rank()
-        self.num_coords = self.leader_rank
+        self.isolated_rank = self.leader_rank - 1
+        self.num_dist_coords = self.isolated_rank
         
         self.init_params()
         os.makedirs(self.temp_folder_path, exist_ok=True)
         os.makedirs(self.output_folder_path, exist_ok=True)
 
         self.init_logging()        
-        logging.debug(f'num_coords: {self.num_coords}')
+        logging.debug(f'num_dist_coords: {self.num_dist_coords}')
         logging.debug(f'leader_rank: {self.leader_rank}')
         logging.debug(f'temp_folder_path: {self.temp_folder_path}')
         
         self.idle_coordinators = deque()
-        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_coords)]
+        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_dist_coords)]
         ### TBD ### select split coordinator with priority
         self.next_split_rank = 0
         logging.debug(f'init done!')
@@ -136,19 +137,6 @@ class Leader:
                 text=True
             )
     
-    # solver original task with base solver
-    def solve_original_task(self):
-        logging.debug('solve_original_task')
-        self.original_process = self.solve_task(self.input_file_path)
-    
-    # solver simplified root task with base solver
-    def try_solve_simplified_root_task(self):
-        root_init_file = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0/task-0.done'
-        task_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0/task-0.smt2'
-        if os.path.exists(root_init_file):
-            logging.debug('solve_simplified_root_task')
-            self.simplified_process = self.solve_task(task_path)
-    
     def is_done(self):
         return self.tree.is_done()
     
@@ -174,7 +162,7 @@ class Leader:
         self.coordinators[coord_rank].node_solved()
         self.idle_coordinators.append(coord_rank)
     
-    def process_notified_result(self, src):
+    def process_distributed_notified_result(self, src):
         result = MPI.COMM_WORLD.recv(source=src, tag=2)
         node = self.coordinators[src].assigned
         logging.info(f'solved: node-{node.id} is {result}')
@@ -184,6 +172,11 @@ class Leader:
             return True
         self.set_coordinator_idle(src)
         return False
+    
+    def process_isolated_notified_result(self):
+        result = MPI.COMM_WORLD.recv(source=self.isolated_rank, tag=2)
+        logging.info(f'solved-by-isolated: {result}')
+        self.tree.original_solved(result)
     
     def check_coordinators(self):
         msg_status = MPI.Status()
@@ -206,40 +199,17 @@ class Leader:
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
                 logging.debug(f'receive {msg_type} message from coordinator-{src}')
-                if self.process_notified_result(src):
+                if src == self.isolated_rank:
+                    self.process_isolated_notified_result()
                     return True
+                else:
+                    if self.process_distributed_notified_result(src):
+                        return True
             else:
                 assert(False)
         return False
     
-    def check_process(self, p):
-        rc = p.poll()
-        if rc == None:
-            return False
-        assert(rc == 0)
-        out_data, err_data = p.communicate()
-        sta: str = out_data.strip('\n').strip(' ')
-        if sta == 'sat':
-            result = NodeStatus.sat
-        elif sta == 'unsat':
-            result = NodeStatus.unsat
-        else:
-            logging.error(f'process error state: {sta}')
-            assert(False)
-        self.tree.original_solved(result)
-        return True
-
-    def check_original_task(self):
-        return self.check_process(self.original_process)
-    
-    def check_simplified_root_task(self):
-        if self.simplified_process == None:
-            self.try_solve_simplified_root_task()
-            return False
-        return self.check_process(self.simplified_process)
-    
-    def assign_root_node(self):
-        # logging.debug(f'assign_root_node()')
+    def init_coord_0(self):
         target_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0'
         os.makedirs(target_path, exist_ok=True)
         shutil.copyfile(self.input_file_path, 
@@ -248,6 +218,14 @@ class Leader:
                             dest=0, tag=1)
         self.tree.assign_root_node()
         self.coordinators[0].assign_node(self.tree.root)
+    
+    def init_coord_isolated(self):
+        target_path = f'{self.temp_folder_path}/Coordinator-{self.isolated_rank}/tasks/round-0'
+        os.makedirs(target_path, exist_ok=True)
+        shutil.copyfile(self.input_file_path, 
+                        f'{target_path}/task-root.smt2')
+        MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
+                            dest=self.isolated_rank, tag=1)
     
     def get_next_idle_coordinator(self):
         # FIFO
@@ -258,7 +236,7 @@ class Leader:
     def select_coordinator_to_split(self):
         # FIFO
         rank = self.next_split_rank
-        self.next_split_rank = (rank + 1) % self.num_coords
+        self.next_split_rank = (rank + 1) % self.num_dist_coords
         split_coord: CoordinatorInfo = self.coordinators[rank]
 
         if split_coord.status.is_solving() and \
@@ -301,7 +279,7 @@ class Leader:
         pp_num_nodes: int = MPI.COMM_WORLD.recv(source=0, tag=2)
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                     dest=0, tag=1)
-        for i in range(1, self.num_coords):
+        for i in range(1, self.num_dist_coords):
             if i < pp_num_nodes:
                 self.coordinators[0].status = CoordinatorStatus.splitting
                 self.send_assign_message(0, i)
@@ -310,15 +288,13 @@ class Leader:
                 self.idle_coordinators.append(i)
     
     def setup_distributed_solving(self):
-        self.assign_root_node()
+        self.init_coord_0()
         while True:
-            if self.solve_original_flag:
-                if self.check_original_task():
-                    logging.info(f'solved-by-original {self.get_result()}')
-                    return True
-                if self.check_simplified_root_task():
-                    logging.info(f'solved-by-simplified {self.get_result()}')
-                    return True
+            if MPI.COMM_WORLD.Iprobe(source=self.isolated_rank, tag=1):
+                msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=self.isolated_rank, tag=1)
+                assert(msg_type.is_notify_result())
+                self.process_isolated_notified_result()
+                return True
             if MPI.COMM_WORLD.Iprobe(source=0, tag=1):
                 msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=0, tag=1)
                 if msg_type.is_pre_partition_done():
@@ -326,45 +302,33 @@ class Leader:
                     return False
                 elif msg_type.is_notify_result():
                     # coordinator {src} solved the assigned task
-                    if self.process_notified_result(0):
+                    if self.process_distributed_notified_result(0):
                         return True
                 else:
                     assert(False)
     
     def solve(self):
-        if self.solve_original_flag:
-            self.solve_original_task()
-            self.simplified_process = None
+        self.init_coord_isolated()
         if self.setup_distributed_solving():
             return
         # communicate with coordinators
         while True:
-            if self.solve_original_flag:
-                if self.check_original_task():
-                    logging.info(f'solved-by-original {self.get_result()}')
-                    return
-                if self.check_simplified_root_task():
-                    logging.info(f'solved-by-simplified {self.get_result()}')
-                    return
             if self.check_coordinators():
                 return
             self.assign_node_to_idle_coordinator()
-            # time.sleep(0.01)
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
+            # time.sleep(0.01)
     
     def terminate_coordinators(self):
-        for i in range(self.num_coords):
+        for i in range(self.num_dist_coords):
             MPI.COMM_WORLD.send(ControlMessage.L2C.terminate_coordinator,
                                 dest=i, tag=1)
+        MPI.COMM_WORLD.send(ControlMessage.L2C.terminate_coordinator,
+                                dest=self.isolated_rank, tag=1)
     
     def clean_up(self):
         self.terminate_coordinators()
-        if self.solve_original_flag:
-            if self.original_process != None:
-                self.original_process.terminate()
-            if self.simplified_process != None:
-                self.simplified_process.terminate()
     
     def __call__(self):
         try:

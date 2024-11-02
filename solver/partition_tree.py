@@ -154,8 +154,8 @@ class ParallelTree(PartitionTree):
         
         self.total_solve_time = 0.0
         self.average_solve_time = 0.0
-        self.split_thres_max = 50.0
-        self.split_thres_min = 10.0
+        self.split_thres_max = 25.0
+        self.split_thres_min = 5.0
         
         super().__init__(start_time)
     

@@ -35,9 +35,10 @@ def select_solver_for_logic(logic: str):
 if __name__ == '__main__':
     output_total_time = True
     
+    
     if output_total_time:
         start_time = time.time()
-    
+
     request_directory = sys.argv[1]
     with open(f'{request_directory}/input.json', 'r') as file:
         config_data: dict = json.load(file)
@@ -45,7 +46,10 @@ if __name__ == '__main__':
     formula_file = config_data['formula_file']
     timeout_seconds: int = config_data['timeout_seconds']
     worker_node_ips = config_data['worker_node_ips']
-    worker_node_cores = config_data.get('worker_node_cores')
+    worker_node_cores: list = config_data.get('worker_node_cores')
+    
+    # fixed_parallel_cores = 8
+    # assert(worker_node_cores[0] > fixed_parallel_cores)
     
     # formula_logic = get_logic(formula_file)
     # base_solver = select_solver_for_logic(formula_logic)
@@ -74,6 +78,10 @@ if __name__ == '__main__':
             # ##//linxi-test
             # print(f'{node_ip} slots={slot}\n')
         rfile.write(f'rank {node_number}={worker_node_ips[0]} slot=*\n')
+        rfile.write(f'rank {node_number + 1}={worker_node_ips[0]} slot=*\n')
+    
+    worker_node_cores[0] -= 8
+    worker_node_cores.append(7)
     
     cmd_paras = [
         'mpiexec',
