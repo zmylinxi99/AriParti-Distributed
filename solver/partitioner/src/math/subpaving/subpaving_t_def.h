@@ -24,9 +24,9 @@ Revision History:
 #include "util/z3_exception.h"
 #include "util/common_msgs.h"
 #include "util/gparams.h"
+
 #include <memory>
 #include <thread>
-
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -310,13 +310,13 @@ void context_t<C>::updt_params(params_ref const & p) {
     nm().set(m_minus_max_bound, m_max_bound);
     nm().neg(m_minus_max_bound);
 
-    // max denominator 10^20
+    // max denominator 10^15
     nm().set(m_max_denominator, 10);
-    nm().power(m_max_denominator, 20, m_max_denominator);
+    nm().power(m_max_denominator, 15, m_max_denominator);
 
-    // denominator after adjust 10^15
+    // denominator after adjust 10^10
     nm().set(m_adjust_denominator, 10);
-    nm().power(m_adjust_denominator, 15, m_adjust_denominator);
+    nm().power(m_adjust_denominator, 10, m_adjust_denominator);
     
 
     m_max_depth = p.get_uint("max_depth", 128);
@@ -792,8 +792,17 @@ typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
     node * r;
     if (parent == nullptr) {
         r = new (mem) node(*this, m_num_nodes, m_is_bool);
-        for (unsigned i = 0; i < m_var_key_num; ++i)
-            r->key_rank().push_back(i);
+        if (m_rand_seed != 1) {
+            for (unsigned i = 0; i < m_var_key_num; ++i)
+                r->key_rank().push_back(i);
+        }
+        else {
+            r->key_rank().push_back(0);
+            r->key_rank().push_back(3);
+            r->key_rank().push_back(1);
+            r->key_rank().push_back(2);
+            r->key_rank().push_back(4);
+        }
     }
     else {
         r = new (mem) node(parent, m_num_nodes);
@@ -813,7 +822,7 @@ typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
         // }
         // static key rank
         for (unsigned i = 0; i < m_var_key_num; ++i)
-            r->key_rank().push_back(i);
+            r->key_rank().push_back(parent->key_rank()[i]);
     }
 
     // Add node in the leaf dlist
@@ -2049,7 +2058,9 @@ void context_t<C>::init_partition() {
     m_var_occs.resize(num_vars());
     m_var_max_deg.resize(num_vars());
     m_var_split_cnt.resize(num_vars(), 0);
+    m_var_split_prob.resize(num_vars(), 1.0);
     
+    m_split_prob_decay = 0.9;
     m_alive_task_num = 0;
     m_var_key_num = 5;
 
@@ -2062,6 +2073,9 @@ void context_t<C>::init_partition() {
     nm().set(m_split_delta, 128);
     nm().set(m_unbounded_penalty, 1024);
     nm().set(m_unbounded_penalty_sq, 1024 * 1024);
+    
+    m_rand_seed = p.get_uint("partition_rand_seed", 0);
+    m_rand.seed(m_rand_seed);
 
     init_communication();
 }
@@ -2399,6 +2413,7 @@ void context_t<C>::select_best_var(node * n) {
     for (unsigned i = 0; i < m_var_key_num; ++i) {
         m_curr_var_info.m_key_rank[i] = n->key_rank()[i];
     }
+    std::uniform_real_distribution<> dis(0.0, 1.0);
     for (unsigned x = 0, nv = num_vars(); x < nv; ++x) {
         if (m_defs[x] != nullptr)
             continue;
@@ -2411,6 +2426,8 @@ void context_t<C>::select_best_var(node * n) {
             continue;
         }
         if (m_var_occs[x] == 0)
+            continue;
+        if (m_best_var_info.m_id != null_var && dis(m_rand) > m_var_split_prob[x])
             continue;
         m_curr_var_info.m_id = x;
         m_curr_var_info.m_split_cnt = m_var_split_cnt[x];
@@ -2629,7 +2646,8 @@ void context_t<C>::split_node(node * n) {
             tout << "\n";
     );
     ++m_var_split_cnt[id];
-
+    m_var_split_prob[id] *= m_split_prob_decay;
+    
     node * left   = this->mk_node(n);
     node * right  = this->mk_node(n);
     bound * lower = n->lower(id);

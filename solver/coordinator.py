@@ -338,10 +338,16 @@ class Coordinator:
     
     # run the partitioner
     def run_partitioner(self):
+        if self.rank != self.isolated_rank:
+            parti_seed = 0
+        else:
+            parti_seed = 1
+        
         cmd =  [self.partitioner_path,
                 f'{self.solving_folder_path}/task-root.smt2',
                 f'-outputdir:{self.solving_folder_path}',
-                f'-partmrt:{max(self.available_cores, self.num_dist_coords)}'
+                f'-partimrt:{max(self.available_cores, self.num_dist_coords)}',
+                f'-partiseed:{parti_seed}'
             ]
         logging.debug(f'exec-command {" ".join(cmd)}')
         p = subprocess.Popen(
@@ -554,8 +560,7 @@ class Coordinator:
                 assert(self.status.is_idle())
                 self.process_assign_message()
             elif msg_type.is_terminate_coordinator():
-                if self.tree != None:
-                    self.tree.log_display()
+                self.tree.log_display()
                 raise TerminateMessage()
             else:
                 assert(False)
@@ -610,8 +615,7 @@ class Coordinator:
             assert(isinstance(msg_type, ControlMessage.L2C))
             # logging.debug(f'receive {msg_type} message from leader')
             if msg_type.is_terminate_coordinator():
-                if self.tree != None:
-                    self.tree.log_display()
+                self.tree.log_display()
                 raise TerminateMessage()
             else:
                 assert(False)
@@ -624,12 +628,14 @@ class Coordinator:
                 msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
                 assert(isinstance(msg_type, ControlMessage.L2C))
                 assert(msg_type.is_terminate_coordinator())
-                if self.tree != None:
-                    self.tree.log_display()
+                self.tree.log_display()
                 raise TerminateMessage()
             if self.status.is_solving():
-                if self.check_original_task() \
-                   or self.parallel_solving():
+                if self.check_original_task():
+                    self.solving_round_done()
+                    continue
+                if self.parallel_solving():
+                    self.tree.log_display()
                     self.solving_round_done()
             ### TBD ###
             # sleep

@@ -297,8 +297,11 @@ static void parse_cmd_line_args(std::string& input_file, int argc, char ** argv)
             else if (strcmp(opt_name, "outputdir") == 0) {
                 gparams::set("output_dir", opt_arg);
             }
-            else if (strcmp(opt_name, "partmrt") == 0) {
+            else if (strcmp(opt_name, "partimrt") == 0) {
                 gparams::set("partition_max_running_tasks", opt_arg);
+            }
+            else if (strcmp(opt_name, "partiseed") == 0) {
+                gparams::set("partition_rand_seed", opt_arg);
             }
             else {
                 std::cerr << "Error: invalid command line option: " << arg << "\n";

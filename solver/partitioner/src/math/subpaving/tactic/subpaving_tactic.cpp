@@ -22,7 +22,6 @@ Revision History:
 #include "ast/expr2var.h"
 #include "ast/arith_decl_plugin.h"
 #include "ast/ast_smt2_pp.h"
-#include <iostream>
 #include "tactic/core/elim_term_ite_tactic.h"
 #include "tactic/core/elim_uncnstr_tactic.h"
 #include "tactic/core/propagate_values_tactic.h"
@@ -30,6 +29,8 @@ Revision History:
 #include "tactic/core/tseitin_cnf_tactic.h"
 #include "tactic/arith/purify_arith_tactic.h"
 #include "util/gparams.h"
+
+#include <iostream>
 
 class subpaving_tactic : public tactic {
 

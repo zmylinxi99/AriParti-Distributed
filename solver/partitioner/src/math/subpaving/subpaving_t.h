@@ -18,8 +18,6 @@ Revision History:
 --*/
 #pragma once
 
-#include <ostream>
-#include <queue>
 #include "util/tptr.h"
 #include "util/small_object_allocator.h"
 #include "util/chashtable.h"
@@ -31,6 +29,10 @@ Revision History:
 #include "util/statistics.h"
 #include "util/lbool.h"
 #include "util/rlimit.h"
+
+#include <ostream>
+#include <queue>
+#include <random>
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4200)
@@ -515,6 +517,8 @@ public:
             if (m_is_too_short != rhs.m_is_too_short)
                 return rhs.m_is_too_short;
             for (unsigned i : m_key_rank) {
+                if (i == 0)
+                    continue;
                 if (!key_eq(i, rhs))
                     return key_lt(i, rhs);
             }
@@ -609,6 +613,8 @@ private:
     unsigned            m_root_max_prop_time;
     unsigned            m_max_prop_time;
 
+    unsigned            m_rand_seed;
+    std::mt19937        m_rand;
     unsigned            m_var_key_num;
     var_info            m_best_var_info;
     var_info            m_curr_var_info;
@@ -618,7 +624,9 @@ private:
     unsigned_vector      m_var_occs;
     unsigned_vector      m_var_max_deg;
     unsigned_vector      m_var_split_cnt;
-
+    double_vector        m_var_split_prob;
+    
+    double               m_split_prob_decay;
     numeral             m_split_delta;
 
     bool                m_init;

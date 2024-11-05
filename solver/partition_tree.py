@@ -381,7 +381,8 @@ class ParallelTree(PartitionTree):
     
     def log_display(self):
         logging.debug(f'display parallel tree')
-        self.log_display_dfs(self.root, 0)
+        if self.root != None:
+            self.log_display_dfs(self.root, 0)
 
 class DistributedNode(PartitionNode):
     def __init__(self, id, parent, make_time):
