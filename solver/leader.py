@@ -123,20 +123,6 @@ class Leader:
     def get_current_time(self):
         return time.time() - self.start_time
     
-        # solver original task with base solver
-    def solve_task(self, task_path):
-        cmd =  [self.solver_path,
-                task_path
-            ]
-        
-        logging.debug('exec-command {}'.format(' '.join(cmd)))
-        return subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-    
     def is_done(self):
         return self.tree.is_done()
     
@@ -367,4 +353,5 @@ class Leader:
                 f.write(f'{result}\n{execution_time}\n')
         
         self.clean_up()
+        MPI.COMM_WORLD.Barrier()
         # MPI.COMM_WORLD.Abort()

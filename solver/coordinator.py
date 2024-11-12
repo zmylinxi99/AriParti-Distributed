@@ -47,13 +47,13 @@ class Coordinator:
         self.init_params()
         
         
-        self.temp_folder_path = f'{self.temp_folder_path}/Coordinator-{self.rank}'
+        self.coord_temp_folder_path = f'{self.temp_dir}/Coordinator-{self.rank}'
         # assign a core to coordinator and partitioner
         self.available_cores -= 1
         self.max_unsolved_tasks = self.available_cores + self.available_cores // 3 + 1
         
         self.init_logging()
-        os.makedirs(self.temp_folder_path, exist_ok=True)
+        os.makedirs(self.coord_temp_folder_path, exist_ok=True)
         
         self.status: CoordinatorStatus = CoordinatorStatus.idle
         self.result = NodeStatus.unsolved
@@ -61,7 +61,7 @@ class Coordinator:
         self.tree = None
         
         logging.debug(f'rank: {self.rank}, leader_rank: {self.leader_rank}')
-        logging.debug(f'temp_folder_path: {self.temp_folder_path}')
+        logging.debug(f'temp_folder_path: {self.coord_temp_folder_path}')
         logging.debug(f'coordinator-{self.rank} init done!')
     
     def init_logging(self):
@@ -102,7 +102,7 @@ class Coordinator:
         cmd_args = arg_parser.parse_args()
         self.partitioner_path: str = cmd_args.partitioner
         self.solver_path: str = cmd_args.solver
-        self.temp_folder_path: str = cmd_args.temp_dir
+        self.temp_dir: str = cmd_args.temp_dir
         self.output_folder_path: str = cmd_args.output_dir
         
         available_cores_list: list = json.loads(cmd_args.available_cores_list)
@@ -364,7 +364,7 @@ class Coordinator:
             self.partitioner.p.terminate()
     
     def start_solving(self):
-        self.solving_folder_path = f'{self.temp_folder_path}/tasks/round-{self.solving_round}'
+        self.solving_folder_path = f'{self.coord_temp_folder_path}/tasks/round-{self.solving_round}'
         
         self.status = CoordinatorStatus.solving
         self.result = NodeStatus.unsolved
@@ -389,7 +389,7 @@ class Coordinator:
             if self.is_done():
                 return True
         if self.check_solvings_status():
-            # self.tree.log_display()
+            # self.tree_log_display()
             return True
         self.run_waiting_tasks()
         return False
@@ -461,7 +461,7 @@ class Coordinator:
             assert(False)
     
     def receive_node_from_coordinator(self, coord_rank):
-        solving_folder_path = f'{self.temp_folder_path}/tasks/round-{self.solving_round}'
+        solving_folder_path = f'{self.coord_temp_folder_path}/tasks/round-{self.solving_round}'
         os.makedirs(solving_folder_path, exist_ok=True)
         instance_path = f'{solving_folder_path}/task-root.smt2'
         instance_data = MPI.COMM_WORLD.recv(source=coord_rank, tag=2)
@@ -527,14 +527,7 @@ class Coordinator:
                 node.assign_to.terminate()
                 node.assign_to = None
         self.tree = None
-    
-    def clean_up(self):
-        if self.rank == self.isolated_rank:
-            if self.original_process != None:
-                self.original_process.terminate()
-        if self.status.is_solving():
-            self.round_clean_up()
-        shutil.rmtree(self.temp_folder_path)
+        # shutil.rmtree(self.solving_folder_path)
 
     def solving_round_done(self):
         self.send_result_to_leader()
@@ -560,7 +553,7 @@ class Coordinator:
                 assert(self.status.is_idle())
                 self.process_assign_message()
             elif msg_type.is_terminate_coordinator():
-                self.tree.log_display()
+                self.tree_log_display()
                 raise TerminateMessage()
             else:
                 assert(False)
@@ -615,7 +608,7 @@ class Coordinator:
             assert(isinstance(msg_type, ControlMessage.L2C))
             # logging.debug(f'receive {msg_type} message from leader')
             if msg_type.is_terminate_coordinator():
-                self.tree.log_display()
+                self.tree_log_display()
                 raise TerminateMessage()
             else:
                 assert(False)
@@ -628,17 +621,31 @@ class Coordinator:
                 msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
                 assert(isinstance(msg_type, ControlMessage.L2C))
                 assert(msg_type.is_terminate_coordinator())
-                self.tree.log_display()
+                self.tree_log_display()
                 raise TerminateMessage()
             if self.status.is_solving():
                 if self.check_original_task():
                     self.solving_round_done()
                     continue
                 if self.parallel_solving():
-                    self.tree.log_display()
+                    self.tree_log_display()
                     self.solving_round_done()
             ### TBD ###
             # sleep
+    
+    def tree_log_display(self):
+        if self.tree != None:
+            self.tree.log_display()
+    
+    def clean_up(self):
+        if self.rank == self.isolated_rank:
+            if self.original_process != None:
+                self.original_process.terminate()
+        if self.status.is_solving():
+            self.round_clean_up()
+            
+    def clean_temp_dir(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
     
     def __call__(self):
         try:
@@ -653,3 +660,5 @@ class Coordinator:
             logging.error(f'{traceback.format_exc()}')
             MPI.COMM_WORLD.Abort()
         self.clean_up()
+        MPI.COMM_WORLD.Barrier()
+        self.clean_temp_dir()
