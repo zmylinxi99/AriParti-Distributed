@@ -240,6 +240,7 @@ public:
         node *                m_prev;
         node *                m_next;
         unsigned_vector       m_key_rank;
+        unsigned_vector       m_split_vars;
         ptr_vector<atom>      m_up_atoms;
     public:
         node(context_t & s, unsigned id, bool_vector &is_bool);
@@ -278,6 +279,7 @@ public:
         unsigned depth() const { return m_depth; }
         
         unsigned_vector & key_rank() { return m_key_rank; }
+        unsigned_vector & split_vars() { return m_split_vars; }
         ptr_vector<atom> & up_atoms() { return m_up_atoms; }
     };
     
@@ -621,10 +623,15 @@ private:
     numeral             m_unbounded_penalty;
     numeral             m_unbounded_penalty_sq;
 
+    unsigned_vector      m_var_split_candidates;
+    
     unsigned_vector      m_var_occs;
     unsigned_vector      m_var_max_deg;
     unsigned_vector      m_var_split_cnt;
-    double_vector        m_var_split_prob;
+    unsigned_vector      m_var_unsolved_split_cnt;
+    // double_vector        m_var_split_prob;
+    // solving leaf node contribution
+    // double_vector        m_var_split_score;
     
     double               m_split_prob_decay;
     numeral             m_split_delta;
@@ -646,6 +653,7 @@ private:
     clock_t             m_start_time;
 
     unsigned            m_alive_task_num;
+    unsigned            m_unsolved_task_num;
     // ptr_vector<node>    m_alive_tasks;
     
     ptr_vector<node>    m_nodes;
@@ -922,15 +930,15 @@ private:
 
     void split_node(node * n);
 
-    void write_ss_line_to_master();
+    void write_ss_line_to_coordinator();
     
-    void write_line_to_master(const std::string & data);
+    void write_line_to_coordinator(const std::string & data);
     
-    void write_debug_line_to_master(const std::string & data);
+    void write_debug_line_to_coordinator(const std::string & data);
 
-    void write_debug_ss_line_to_master();
+    void write_debug_ss_line_to_coordinator();
 
-    bool read_line_from_master();
+    bool read_line_from_coordinator();
 
     bool update_node_state_unsat(unsigned id);
 
@@ -940,13 +948,15 @@ private:
 
     void unsat_push_up(node * n);
 
+    void update_split_score(node * n);
+    
     void node_solved_unsat(node * n);
     
     void parse_line(const std::string & line);
 
     // bool read_parse_line();
 
-    void communicate_with_master();
+    void communicate_with_coordinator();
 
     node * select_next_node();
     

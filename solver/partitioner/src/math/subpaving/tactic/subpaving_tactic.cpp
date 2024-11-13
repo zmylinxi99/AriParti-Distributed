@@ -508,7 +508,6 @@ class subpaving_tactic : public tactic {
             }
             else {
                 UNREACHABLE();
-                // TBD
             }
 
             g->inc_depth();
@@ -610,9 +609,7 @@ void linxi_trace() {
 }
 
 tactic * mk_subpaving_tactic(ast_manager & m, params_ref const & p) {
-    
     // linxi_trace();
-
     params_ref simp_p  = p;
     simp_p.set_bool("arith_lhs", true);
     simp_p.set_bool("expand_power", true);
