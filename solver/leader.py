@@ -4,7 +4,6 @@ import time
 import logging
 import argparse
 import traceback
-import subprocess
 from mpi4py import MPI
 from datetime import datetime
 from collections import deque
@@ -12,7 +11,7 @@ from collections import deque
 from coordinator import CoordinatorStatus
 from partition_tree import NodeStatus
 from partition_tree import DistributedNode, DistributedTree
-from control_message import ControlMessage
+from control_message import ControlMessage, CoordinatorErrorMessage
 
 class CoordinatorInfo:
     def __init__(self, rank, start_time):
@@ -191,6 +190,9 @@ class Leader:
                 else:
                     if self.process_distributed_notified_result(src):
                         return True
+            elif msg_type.is_notify_error():
+                logging.error(f'receive {msg_type} message from coordinator-{src}')
+                raise CoordinatorErrorMessage()
             else:
                 assert(False)
         return False
@@ -224,7 +226,7 @@ class Leader:
         rank = self.next_split_rank
         self.next_split_rank = (rank + 1) % self.num_dist_coords
         split_coord: CoordinatorInfo = self.coordinators[rank]
-
+    
         if split_coord.status.is_solving() and \
            self.get_current_time() >= split_coord.last_split + self.split_tabu:
             return rank
@@ -326,11 +328,14 @@ class Leader:
         #     result = 'AssertionError'
         #     # print(f'AssertionError: {ae}')
         #     # logging.info(f'AssertionError: {ae}')
+        except CoordinatorErrorMessage:
+            result = 'Coordinator-Error'
+            self.tree.log_display()
         except Exception as e:
-            result = 'Exception'
-            logging.error(f'Leader Exception: {e}')
+            result = 'Leader-Error'
+            logging.error(f'Leader Error: {e}')
             logging.error(f'{traceback.format_exc()}')
-            MPI.COMM_WORLD.Abort()
+            # MPI.COMM_WORLD.Abort()
         else:
             status: NodeStatus = self.get_result()
             if status.is_sat():

@@ -16,6 +16,11 @@ from partition_tree import NodeStatus, NodeReason
 from control_message import TerminateMessage, ControlMessage
 from partitioner import Partitioner
 
+
+def raise_error(error_info):
+    logging.error(error_info)
+    raise Exception(error_info)
+
 class CoordinatorStatus(Enum):
     idle = auto()
     waiting = auto()
@@ -141,8 +146,8 @@ class Coordinator:
                 self.result = NodeStatus.unsat
             elif result == 'unknown':
                 if self.tree.get_node_number() == 0:
-                    logging.error('Partitioner error')
-                    assert(False)
+                    raise_error('Partitioner error')
+                    # assert(False)
                     # MPI.COMM_WORLD.Abort()
             else:
                 assert(False)
@@ -226,10 +231,8 @@ class Coordinator:
         out_data, err_data = p.communicate()
         
         if rc != 0:
-            logging.error('return code != 0')
-            logging.error(f'stdout: {out_data}')
-            logging.error(f'stderr: {err_data}')
-            MPI.COMM_WORLD.Abort(rc)
+            raise_error(f'return code != 0\nstdout: {out_data}\nstderr: {err_data}')
+            # MPI.COMM_WORLD.Abort(rc)
 
         sta: str = out_data.strip('\n').strip(' ')
         assert(rc == 0)
@@ -238,8 +241,8 @@ class Coordinator:
         elif sta == 'unsat':
             return NodeStatus.unsat
         else:
-            logging.error(f'subprocess error state: {sta}')
-            assert(False)
+            raise_error(f'subprocess error state: {sta}')
+            # assert(False)
     
     def send_partitioner_message(self, msg: str):
         logging.debug(f'send_partitioner_message: {msg}')
@@ -584,8 +587,7 @@ class Coordinator:
         elif sta == 'unsat':
             self.result = NodeStatus.unsat
         else:
-            logging.error(f'process error state: {sta}')
-            assert(False)
+            raise_error(f'process error state: {sta}')
         return True
     
     def check_original_task(self):
@@ -601,17 +603,6 @@ class Coordinator:
     def solve_original_task(self):
         logging.debug('solve_original_task')
         self.original_process = self.solve_task('root')
-    
-    def receive_isolated_message_from_leader(self):
-        if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
-            msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
-            assert(isinstance(msg_type, ControlMessage.L2C))
-            # logging.debug(f'receive {msg_type} message from leader')
-            if msg_type.is_terminate_coordinator():
-                self.tree_log_display()
-                raise TerminateMessage()
-            else:
-                assert(False)
     
     def isolated_solve(self):
         self.solve_leader_root()
@@ -658,7 +649,14 @@ class Coordinator:
         except Exception as e:
             logging.error(f'Coordinator-{self.rank} Exception: {e}')
             logging.error(f'{traceback.format_exc()}')
-            MPI.COMM_WORLD.Abort()
+            MPI.COMM_WORLD.send(ControlMessage.C2L.notify_error,
+                            dest=self.leader_rank, tag=1)
+            while True:
+                msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
+                assert(isinstance(msg_type, ControlMessage.L2C))
+                if msg_type.is_terminate_coordinator():
+                    break
+            # MPI.COMM_WORLD.Abort()
         self.clean_up()
         MPI.COMM_WORLD.Barrier()
         self.clean_temp_dir()

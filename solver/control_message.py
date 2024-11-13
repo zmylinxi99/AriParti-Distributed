@@ -1,5 +1,9 @@
 from enum import Enum, auto
 
+class CoordinatorErrorMessage(Exception):
+    def __str__(self):
+        return 'Coordinator Error'
+
 class TerminateMessage(Exception):
     def __str__(self):
         return 'Terminate by Leader'
@@ -44,6 +48,8 @@ class ControlMessage:
         # pre-partiitoning done
         pre_partition_done = auto()
         
+        notify_error = auto()
+        
         def is_split_succeed(self):
             return self == ControlMessage.C2L.split_succeed
         
@@ -55,6 +61,9 @@ class ControlMessage:
         
         def is_pre_partition_done(self):
             return self == ControlMessage.C2L.pre_partition_done
+    
+        def is_notify_error(self):
+            return self == ControlMessage.C2L.notify_error
     
     # Coordinator To Coordinator
     class C2C(Enum):
