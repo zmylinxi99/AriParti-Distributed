@@ -5,7 +5,6 @@ import logging
 import subprocess
 from enum import Enum, auto
 
-
 # NodeStatus
 # waiting solving sat unsat unknown
 # waiting -> solving BY (run task)
@@ -39,6 +38,9 @@ class NodeStatus(Enum):
     
     def is_terminated(self):
         return self == NodeStatus.terminated
+    
+    def is_error(self):
+        return self == NodeStatus.error
     
     def is_ended(self):
         return self.is_solved() or self.is_terminated()
@@ -150,7 +152,6 @@ class ParallelTree(PartitionTree):
         self.waitings = deque()
         # self.endeds = []
         self.pid2node = {}
-        self.unsyncs = []
         
         self.total_solve_time = 0.0
         self.average_solve_time = 0.0
@@ -173,23 +174,12 @@ class ParallelTree(PartitionTree):
                 self.average_solve_time = self.total_solve_time / solved_number
                 logging.debug(f'solve time: {solve_time}')
                 logging.debug(f'solved_number: {solved_number}, average_solve_time: {self.average_solve_time}')
-                self.sync_to_partitioner(node)
-            elif reason == NodeReason.split:
-                self.sync_to_partitioner(node)
-            else:
-                pass
-            # elif reason == NodeReason.children:
-            #     self.unsat_by_children_number += 1
-            #     self.propagated_number += 1
-            # elif reason == NodeReason.ancester:
-            #     self.unsat_by_ancestor_number += 1
-            #     self.propagated_number += 1
-            # else:
-            #     assert(False)
-        elif status.is_terminated():
-            self.sync_to_partitioner(node)
-            # if reason == NodeReason.coordinator:
+            # elif reason == NodeReason.split:
             #     self.sync_to_partitioner(node)
+            # else:
+            #     pass
+        # elif status.is_terminated():
+        #     self.sync_to_partitioner(node)
     
     # pid: id in partitioner
     # ppid: parent id in partitioner
@@ -228,26 +218,18 @@ class ParallelTree(PartitionTree):
     
     # precond: node is solving
     # terminate: unsolved or solving
-    def terminate_node(self, node: ParallelNode):
-        self.update_node_status(node, 
-                    NodeStatus.terminated, 
-                    NodeReason.coordinator)
-        if node.assign_to != None:
-            node.assign_to.terminate()
-            node.assign_to = None
-    
-    def terminate_by_split(self, node: ParallelNode):
+    def terminate_node(self, node: ParallelNode, reason: NodeReason):
         if node.status.is_ended():
             return
         self.update_node_status(node, 
                     NodeStatus.terminated, 
-                    NodeReason.split)
+                    reason)
         if node.assign_to != None:
             node.assign_to.terminate()
             node.assign_to = None
     
     def terminate_split_path(self, node: ParallelNode):
-        self.terminate_by_split(node)
+        self.terminate_node(node, NodeReason.split)
         if node.parent != None:
             self.terminate_split_path(node.parent)
     
@@ -307,9 +289,6 @@ class ParallelTree(PartitionTree):
         if node.assign_to != None:
             node.assign_to.terminate()
             node.assign_to = None
-    
-    def sync_to_partitioner(self, node: ParallelNode):
-        self.unsyncs.append(node)
     
     def update_node_unsat_percent(self, node: ParallelNode):
         node.update_unsat_percent()

@@ -43,6 +43,8 @@ class Coordinator:
     def __init__(self):
         self.partitioner = None
         self.solving_round = 0
+        # terminate on demand
+        self.terminate_threshold = [1200.0, 200.0, 100.0]
         
         self.coordinator_start_time = time.time()
         self.rank = MPI.COMM_WORLD.Get_rank()
@@ -50,7 +52,6 @@ class Coordinator:
         self.isolated_rank = self.leader_rank - 1
         self.num_dist_coords = self.isolated_rank
         self.init_params()
-        
         
         self.coord_temp_folder_path = f'{self.temp_dir}/Coordinator-{self.rank}'
         # assign a core to coordinator and partitioner
@@ -175,6 +176,8 @@ class Coordinator:
                         root_init_file = f'{self.solving_folder_path}/task-0.done'
                         with open(root_init_file, 'w') as file:
                             file.write('done')
+                # if pid % 10 == 0:
+                #     self.log_tree_infos()
                 self.log_tree_infos()
                 ### TBD ###
             else:
@@ -231,8 +234,12 @@ class Coordinator:
         out_data, err_data = p.communicate()
         
         if rc != 0:
-            raise_error(f'return code != 0\nstdout: {out_data}\nstderr: {err_data}')
-            # MPI.COMM_WORLD.Abort(rc)
+            logging.error('subprocess error')
+            logging.error(f'return code = {rc}')
+            logging.error(f'stdout: {out_data}')
+            logging.error(f'stderr: {err_data}')
+            return NodeStatus.error
+            # raise_error(f'return code = {rc}\nstdout: {out_data}\nstderr: {err_data}')
 
         sta: str = out_data.strip('\n').strip(' ')
         assert(rc == 0)
@@ -241,47 +248,76 @@ class Coordinator:
         elif sta == 'unsat':
             return NodeStatus.unsat
         else:
-            raise_error(f'subprocess error state: {sta}')
-            # assert(False)
+            logging.error('subprocess error')
+            logging.error(f'return code = {rc}')
+            logging.error(f'stdout: {out_data}')
+            logging.error(f'stderr: {err_data}')
+            return NodeStatus.error
+            # raise_error(f'subprocess error state: {sta}')
     
     def send_partitioner_message(self, msg: str):
         logging.debug(f'send_partitioner_message: {msg}')
         self.partitioner.send_message(msg)
     
-    def sync_ended_to_partitioner(self):
+    def sync_ended_to_partitioner(self, node: ParallelNode):
         if self.partitioner.check_p_status():
             return
-        for unsync in self.tree.unsyncs:
-            unsync: ParallelNode
-            if unsync.status.is_unsat():
-                msg = f'{ControlMessage.C2P.unsat_node.value} {unsync.pid}'
-            else:
-                msg = f'{ControlMessage.C2P.terminate_node.value} {unsync.pid}'
-            self.send_partitioner_message(msg)
-        self.tree.unsyncs = []
+        if node.status.is_unsat():
+            sta_val = ControlMessage.C2P.unsat_node.value
+        else:
+            sta_val = ControlMessage.C2P.terminate_node.value
+        msg = f'{sta_val} {node.pid}'
+        self.send_partitioner_message(msg)
+    
+    def need_terminate(self, node: ParallelNode):
+        if node.id == 0:
+            return False
+        num_children = len(node.children)
+        num_start = 0
+        if num_children > 0:
+            lc: ParallelNode = node.children[0]
+            if lc.status.is_unsolved():
+                num_start += 1
+        if num_children > 1:
+            rc: ParallelNode = node.children[1]
+            if rc.status.is_unsolved():
+                num_start += 1
+        solving_time = self.tree.get_node_solving_time(node)
+        assert(solving_time is not None)
+        # if solving_time < self.terminate_threshold[num_start]:
+        #     return False
+        # return True
+        return solving_time > self.terminate_threshold[num_start]
+    
+    def terminate_node(self, node: ParallelNode):
+        logging.info(f'terminate node-{node.id}')
+        self.tree.terminate_node(node, NodeReason.coordinator)
+        self.sync_ended_to_partitioner(node)
     
     # True for still running
     def check_solving_status(self, node: ParallelNode):
         if not node.status.is_solving():
             return False
         sta: NodeStatus = self.check_subprocess_status(node.assign_to)
+        if sta.is_error():
+            self.terminate_node(node)
+            return False
         if sta.is_solving():
-            return True
-            ### TBD ###
-            # if self.need_terminate(t):
-            #     self.update_task_status(t, 'terminated')
-            #     self.terminate_task(t)
-            #     self.sync_ended_to_partitioner()
-            #     return False
-            # else:
-            #     return True
+            # return True
+            # ### TBD ###
+            if not self.need_terminate(node):
+                return True
+            self.terminate_node(node)
+            return False
         node.assign_to = None
         logging.info(f'solved: node-{node.id} is {sta}')
         self.tree.node_solved(node, sta)
+        # if self.tree.update_dict.get((NodeStatus.unsat, NodeReason.itself), 0) % 10 == 0:
+        #     self.log_tree_infos()
         self.log_tree_infos()
         if self.is_done():
             return False
-        self.sync_ended_to_partitioner()
+        self.sync_ended_to_partitioner(node)
         return False
     
     def solve_task(self, task_tag: str):
@@ -561,7 +597,7 @@ class Coordinator:
             else:
                 assert(False)
     
-    def distributed_solve(self):
+    def interactive_solve(self):
         if self.rank == 0:
             self.solve_leader_root()
             if self.pre_partition():
@@ -591,8 +627,13 @@ class Coordinator:
         return True
     
     def check_original_task(self):
+        if self.original_process is None:
+            return False
         sta: NodeStatus = self.check_subprocess_status(self.original_process)
         if sta.is_solving():
+            return False
+        elif sta.is_error():
+            self.original_process = None
             return False
         else:
             self.result = sta
@@ -643,7 +684,7 @@ class Coordinator:
             if self.rank == self.isolated_rank:
                 self.isolated_solve()
             else:
-                self.distributed_solve()
+                self.interactive_solve()
         except TerminateMessage:
             logging.info(f'Coordinator-{self.rank} is Terminated by Leader')
         except Exception as e:

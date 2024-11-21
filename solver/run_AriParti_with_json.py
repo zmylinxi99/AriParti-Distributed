@@ -35,7 +35,6 @@ def select_solver_for_logic(logic: str):
 if __name__ == '__main__':
     output_total_time = True
     
-    
     if output_total_time:
         start_time = time.time()
 

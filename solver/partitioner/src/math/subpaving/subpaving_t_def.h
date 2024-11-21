@@ -2069,7 +2069,7 @@ void context_t<C>::init_partition() {
     // m_var_split_cnt.resize(num_vars(), 0);
     // m_var_split_prob.resize(num_vars(), 1.0);
     m_var_unsolved_split_cnt.resize(num_vars(), 0);
-    m_split_prob_decay = 0.7;
+    m_split_prob_decay = 0.8;
     m_alive_task_num = 0;
     m_unsolved_task_num = 0;
     m_var_key_num = 5;
@@ -2470,17 +2470,17 @@ void context_t<C>::select_best_var(node * n) {
         double avg_split_cnt = 
             static_cast<double>(split_cnt) / static_cast<double>(m_unsolved_task_num);
         double choose_prob = pow(m_split_prob_decay, avg_split_cnt);
-        if (split_cnt > 0) {
-            m_temp_stringstream << "var " << x << ", avg_split_cnt: " << avg_split_cnt
-                << ", choose_prob: " << choose_prob << ", unsolved split cnt: " << split_cnt;
-            write_debug_ss_line_to_coordinator();
-        }
+        // if (split_cnt > 0) {
+        //     m_temp_stringstream << "var " << x << ", avg_split_cnt: " << avg_split_cnt
+        //         << ", choose_prob: " << choose_prob << ", unsolved split cnt: " << split_cnt;
+        //     write_debug_ss_line_to_coordinator();
+        // }
         if (m_best_var_info.m_id != null_var && dis(m_rand) > choose_prob)
             continue;
-        if (split_cnt > 0) {
-            m_temp_stringstream << "var " << x << " is chosen";
-            write_debug_ss_line_to_coordinator();
-        }
+        // if (split_cnt > 0) {
+        //     m_temp_stringstream << "var " << x << " is chosen";
+        //     write_debug_ss_line_to_coordinator();
+        // }
         m_curr_var_info.m_id = x;
         m_curr_var_info.m_split_cnt = m_var_unsolved_split_cnt[x];
         m_curr_var_info.m_cz = ((l == nullptr || nm().is_neg(l->value())) 
@@ -2547,10 +2547,12 @@ bool context_t<C>::update_node_state_unsat(unsigned id) {
         // }
         --m_alive_task_num;
     }
-    node * n = m_nodes[id];
-    --m_unsolved_task_num;
-    for (unsigned i = 0, sz = n->depth(); i < sz; ++i) {
-        --m_var_unsolved_split_cnt[n->split_vars()[i]];
+    if (sta != node_state::UNCONVERTED) {
+        node * n = m_nodes[id];
+        --m_unsolved_task_num;
+        for (unsigned i = 0, sz = n->depth(); i < sz; ++i) {
+            --m_var_unsolved_split_cnt[n->split_vars()[i]];
+        }
     }
     sta = node_state::UNSAT;
     return false;
@@ -2777,9 +2779,6 @@ void context_t<C>::split_node(node * n) {
     else {
         m_leaf_heap.emplace(left->id(), m_ptask->m_depth, 
             m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
-        ++m_unsolved_task_num;
-        for (unsigned i = 0, sz = left->depth(); i < sz; ++i)
-            ++m_var_unsolved_split_cnt[left->split_vars()[i]];
     }
 
     m_queue.push_back(rb);
@@ -2795,9 +2794,6 @@ void context_t<C>::split_node(node * n) {
     else {
         m_leaf_heap.emplace(right->id(), m_ptask->m_depth, 
             m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
-        ++m_unsolved_task_num;
-        for (unsigned i = 0, sz = right->depth(); i < sz; ++i)
-            ++m_var_unsolved_split_cnt[right->split_vars()[i]];
     }
 }
 
@@ -2857,7 +2853,8 @@ lbool context_t<C>::operator()() {
     unsigned nid = m_ptask->m_node_id;
     if (nid != UINT32_MAX) {
         ++m_alive_task_num;
-        node * pa = m_nodes[nid]->parent();
+        node * n = m_nodes[nid];
+        node * pa = n->parent();
         int pid = -1;
         if (pa != nullptr)
             pid = static_cast<int>(pa->id());
@@ -2865,10 +2862,12 @@ lbool context_t<C>::operator()() {
                             << " " << nid << " " << pid;
         write_ss_line_to_coordinator();
         m_nodes_state[nid] = node_state::WAITING;
+        ++m_unsolved_task_num;
+        for (unsigned i = 0, sz = n->depth(); i < sz; ++i)
+            ++m_var_unsolved_split_cnt[n->split_vars()[i]];
         split_node(m_nodes[nid]);
         m_ptask->reset();
     }
-
     while (true) {
         communicate_with_coordinator();
         if (m_alive_task_num > m_max_alive_tasks) {
