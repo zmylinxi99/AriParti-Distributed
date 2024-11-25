@@ -3,7 +3,6 @@ import logging
 import subprocess
 from enum import Enum, auto
 
-
 class PartitionerStatus(Enum):
     running = auto()
     wait_result = auto()

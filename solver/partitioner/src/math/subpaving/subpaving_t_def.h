@@ -2145,8 +2145,7 @@ lit context_t<C>::convert_atom_to_lit(atom * a) {
 template<typename C>
 void context_t<C>::convert_node_to_task(node * n) {
     task_info & task = *m_ptask;
-    SASSERT(task.m_node_id == UINT32_MAX);
-
+    // SASSERT(task.m_node_id == UINT32_MAX);
     task.m_node_id = n->id();
     task.m_depth = n->depth();
     vector<lit> temp_units;
@@ -2687,8 +2686,10 @@ template<typename C>
 void context_t<C>::split_node(node * n) {
     select_best_var(n);
     unsigned id = m_best_var_info.m_id;
-    if (id == null_var)
+    if (id == null_var) {
+        write_debug_line_to_coordinator("no split var is selected");
         return;
+    }
     write_debug_line_to_coordinator("best var: " + m_best_var_info.to_string());
     TRACE("linxi_subpaving", 
         var x = id;

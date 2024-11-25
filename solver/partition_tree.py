@@ -219,8 +219,8 @@ class ParallelTree(PartitionTree):
     # precond: node is solving
     # terminate: unsolved or solving
     def terminate_node(self, node: ParallelNode, reason: NodeReason):
-        if node.status.is_ended():
-            return
+        # if node.status.is_ended():
+        #     return
         self.update_node_status(node, 
                     NodeStatus.terminated, 
                     reason)
@@ -228,13 +228,13 @@ class ParallelTree(PartitionTree):
             node.assign_to.terminate()
             node.assign_to = None
     
-    def terminate_split_path(self, node: ParallelNode):
-        self.terminate_node(node, NodeReason.split)
-        if node.parent != None:
-            self.terminate_split_path(node.parent)
+    # def terminate_split_path(self, node: ParallelNode):
+    #     self.terminate_node(node, NodeReason.split)
+    #     if node.parent != None:
+    #         self.terminate_split_path(node.parent)
     
     def set_node_split(self, node: ParallelNode, assigned_coord: int):
-        self.terminate_split_path(node)
+        # self.terminate_split_path(node)
         node.assigned_coord = assigned_coord
         self.node_solved_unsat(node, NodeReason.split)
     

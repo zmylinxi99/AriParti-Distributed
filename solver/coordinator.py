@@ -207,25 +207,6 @@ class Coordinator:
         if is_done:
             assert(self.partitioner.is_done())
     
-    ### TBD ###
-    # def need_terminate(self, t: Task):
-    #     if t.id <= 0:
-    #         return False
-    #     num_st = len(t.subtasks)
-    #     st_end = 0
-    #     if num_st > 0 and t.subtasks[0].status in ['solving', 'unsat', 'terminated']:
-    #         st_end += 1
-    #     if num_st > 1 and t.subtasks[1].status in ['solving', 'unsat', 'terminated']:
-    #         st_end += 1
-        
-    #     if st_end == 0:
-    #         return False
-    #     if st_end == 1 and self.get_current_time() - t.time_infos['solving'] < 200.0:
-    #         return False
-    #     if st_end == 2 and self.get_current_time() - t.time_infos['solving'] < 100.0:
-    #         return False
-    #     return True
-
     def check_subprocess_status(self, p: subprocess.Popen):
         rc = p.poll()
         if rc == None:
@@ -259,10 +240,10 @@ class Coordinator:
         logging.debug(f'send_partitioner_message: {msg}')
         self.partitioner.send_message(msg)
     
-    def sync_ended_to_partitioner(self, node: ParallelNode):
+    def sync_ended_to_partitioner(self, node: ParallelNode, status: NodeStatus):
         if self.partitioner.check_p_status():
             return
-        if node.status.is_unsat():
+        if status.is_unsat():
             sta_val = ControlMessage.C2P.unsat_node.value
         else:
             sta_val = ControlMessage.C2P.terminate_node.value
@@ -276,12 +257,12 @@ class Coordinator:
         num_start = 0
         if num_children > 0:
             lc: ParallelNode = node.children[0]
-            if lc.status.is_unsolved():
+            if not lc.status.is_unsolved():
                 num_start += 1
-        if num_children > 1:
-            rc: ParallelNode = node.children[1]
-            if rc.status.is_unsolved():
-                num_start += 1
+            if num_children > 1:
+                rc: ParallelNode = node.children[1]
+                if not rc.status.is_unsolved():
+                    num_start += 1
         solving_time = self.tree.get_node_solving_time(node)
         assert(solving_time is not None)
         # if solving_time < self.terminate_threshold[num_start]:
@@ -290,9 +271,11 @@ class Coordinator:
         return solving_time > self.terminate_threshold[num_start]
     
     def terminate_node(self, node: ParallelNode):
+        if node.status.is_ended():
+            return
         logging.info(f'terminate node-{node.id}')
         self.tree.terminate_node(node, NodeReason.coordinator)
-        self.sync_ended_to_partitioner(node)
+        self.sync_ended_to_partitioner(node, NodeStatus.terminated)
     
     # True for still running
     def check_solving_status(self, node: ParallelNode):
@@ -307,6 +290,7 @@ class Coordinator:
             # ### TBD ###
             if not self.need_terminate(node):
                 return True
+            logging.info(f'terminate on demand')
             self.terminate_node(node)
             return False
         node.assign_to = None
@@ -317,7 +301,8 @@ class Coordinator:
         self.log_tree_infos()
         if self.is_done():
             return False
-        self.sync_ended_to_partitioner(node)
+        assert(sta.is_unsat())
+        self.sync_ended_to_partitioner(node, NodeStatus.unsat)
         return False
     
     def solve_task(self, task_tag: str):
@@ -437,13 +422,14 @@ class Coordinator:
         return self.tree.select_split_node()
 
     def set_node_split(self, node: ParallelNode, assigned_coord: int):
-        ### TBD ###
+        path_node = node
+        while path_node is not None:
+            self.terminate_node(path_node)
+            path_node = path_node.parent
         self.tree.set_node_split(node, assigned_coord)
-        self.sync_ended_to_partitioner()
+        self.sync_ended_to_partitioner(node, NodeStatus.unsat)
     
     def solve_leader_root(self):
-        # while not MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
-        #     time.sleep(0.01)
         msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
         assert(isinstance(msg_type, ControlMessage.L2C))
         assert(msg_type.is_assign_node())
@@ -610,21 +596,6 @@ class Coordinator:
                     self.solving_round_done()
             ### TBD ###
             # sleep
-    
-    def check_process(self, p):
-        rc = p.poll()
-        if rc == None:
-            return False
-        assert(rc == 0)
-        out_data, err_data = p.communicate()
-        sta: str = out_data.strip('\n').strip(' ')
-        if sta == 'sat':
-            self.result = NodeStatus.sat
-        elif sta == 'unsat':
-            self.result = NodeStatus.unsat
-        else:
-            raise_error(f'process error state: {sta}')
-        return True
     
     def check_original_task(self):
         if self.original_process is None:
