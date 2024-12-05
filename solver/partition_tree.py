@@ -291,9 +291,10 @@ class ParallelTree(PartitionTree):
             node.assign_to = None
     
     def update_node_unsat_percent(self, node: ParallelNode):
-        node.update_unsat_percent()
-        if node.parent != None:
-            self.update_node_unsat_percent(node.parent)
+        current = node
+        while current is not None:
+            current.update_unsat_percent()
+            current = current.parent
     
     def unsat_push_up(self, node: ParallelNode):
         if node.status.is_unsat():
@@ -442,12 +443,20 @@ class DistributedTree(PartitionTree):
         ret.assign_to = coord_id
         return ret
     
-    def log_display_dfs(self, node: DistributedNode, depth: int):
-        logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
-        for child in node.children:
-            self.log_display_dfs(child, depth + 1)
+    # def log_display_dfs(self, node: DistributedNode, depth: int):
+    #     logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
+    #     for child in node.children:
+    #         self.log_display_dfs(child, depth + 1)
     
     def log_display(self):
         logging.debug(f'display distributed tree')
-        self.log_display_dfs(self.root, 0)
+        # self.log_display_dfs(self.root, 0)
+        stack = deque()
+        if self.root is not None:
+            stack.append((self.root, 0))
+        while len(stack) > 0:
+            node, depth = stack.popleft()
+            logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
+            for child in node.children:
+                stack.append((child, depth + 1))
     
