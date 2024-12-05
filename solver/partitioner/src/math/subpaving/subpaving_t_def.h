@@ -2080,6 +2080,10 @@ void context_t<C>::init_partition() {
     write_debug_line_to_coordinator("output dir: " + m_output_dir);
     m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
     m_max_alive_tasks = static_cast<unsigned>(m_max_running_tasks * 1.2) + 2;
+    
+    nm().set(m_tmp1, 1); // numerator
+    nm().set(m_tmp2, 4); // denominator
+    nm().div(m_tmp1, m_tmp2, m_small_value_thres);
     nm().set(m_split_delta, 128);
     nm().set(m_unbounded_penalty, 1024);
     nm().set(m_unbounded_penalty_sq, 1024 * 1024);
@@ -2524,7 +2528,7 @@ void context_t<C>::select_best_var(node * n) {
         else {
             nm().sub(u->value(), l->value(), width);
         }
-        if (nm().le(width, 0.25))
+        if (nm().le(width, m_small_value_thres))
             m_curr_var_info.m_is_too_short = true;
         if (m_best_var_info.m_id == null_var || m_curr_var_info < m_best_var_info) {
             m_best_var_info.copy(m_curr_var_info);

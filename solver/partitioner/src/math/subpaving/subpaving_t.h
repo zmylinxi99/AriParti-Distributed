@@ -620,6 +620,7 @@ private:
     unsigned            m_var_key_num;
     var_info            m_best_var_info;
     var_info            m_curr_var_info;
+    numeral             m_small_value_thres;
     numeral             m_unbounded_penalty;
     numeral             m_unbounded_penalty_sq;
 
@@ -920,7 +921,7 @@ private:
     lit convert_atom_to_lit(atom * a);
 
     void convert_node_to_task(node * n);
-
+    
     /**
        \brief Collect variable informatiion in current node by dp.
     */
