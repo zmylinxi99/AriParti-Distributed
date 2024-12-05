@@ -44,7 +44,8 @@ class Coordinator:
         self.partitioner = None
         self.solving_round = 0
         # terminate on demand
-        self.terminate_threshold = [1200.0, 200.0, 100.0]
+        # self.terminate_threshold = [1200.0, 200.0, 100.0]
+        self.terminate_threshold = [1200.0, 400.0, 300.0, 200.0, 0.0]
         
         self.coordinator_start_time = time.time()
         self.rank = MPI.COMM_WORLD.Get_rank()
@@ -254,21 +255,36 @@ class Coordinator:
         if node.id == 0:
             return False
         num_children = len(node.children)
-        num_start = 0
+        # num_start = 0
+        child_progress = 0
         if num_children > 0:
-            lc: ParallelNode = node.children[0]
-            if not lc.status.is_unsolved():
-                num_start += 1
+            # lc: ParallelNode = node.children[0]
+            # if not lc.status.is_unsolved():
+            #     num_start += 1
+            lc_sta: NodeStatus = node.children[0].status
+            if not lc_sta.is_unsolved():
+                if lc_sta.is_solved():
+                    child_progress += 2
+                else:
+                    child_progress += 1
             if num_children > 1:
-                rc: ParallelNode = node.children[1]
-                if not rc.status.is_unsolved():
-                    num_start += 1
+                # rc: ParallelNode = node.children[1]
+                # if not rc.status.is_unsolved():
+                #     num_start += 1
+                rc_sta: NodeStatus = node.children[1].status
+                if not rc_sta.is_unsolved():
+                    if rc_sta.is_solved():
+                        child_progress += 2
+                    else:
+                        child_progress += 1
+        assert(child_progress < 4)
         solving_time = self.tree.get_node_solving_time(node)
         assert(solving_time is not None)
         # if solving_time < self.terminate_threshold[num_start]:
         #     return False
         # return True
-        return solving_time > self.terminate_threshold[num_start]
+        # return solving_time > self.terminate_threshold[num_start]
+        return solving_time > self.terminate_threshold[child_progress]
     
     def terminate_node(self, node: ParallelNode):
         if node.status.is_ended():

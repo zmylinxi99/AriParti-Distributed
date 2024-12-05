@@ -72,7 +72,7 @@ class Leader:
         self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_dist_coords)]
         ### TBD ### select split coordinator with priority
         self.next_split_rank = 0
-        logging.debug(f'init done!')
+        # logging.debug(f'init done!')
     
     def init_params(self):    
         arg_parser = argparse.ArgumentParser()
