@@ -45,4 +45,5 @@ void env_params::collect_param_descrs(param_descrs & d) {
     d.insert("output_dir", CPK_STRING, "AriParti output dir", "ERROR");
     d.insert("partition_max_running_tasks", CPK_UINT, "AriParti maximum number of tasks running simultaneously", "32");
     d.insert("partition_rand_seed", CPK_UINT, "AriParti random seed", "0");
+    d.insert("get_model_flag", CPK_UINT, "AriParti get model flag", "0");
 }

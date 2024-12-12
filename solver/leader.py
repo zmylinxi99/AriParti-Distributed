@@ -49,8 +49,6 @@ class CoordinatorInfo:
 
 class Leader:
     def __init__(self):
-        # self.solve_original_flag = False
-        self.solve_original_flag = True
         self.split_tabu = 3.0
         
         self.start_time = time.time()
@@ -63,7 +61,8 @@ class Leader:
         os.makedirs(self.temp_folder_path, exist_ok=True)
         os.makedirs(self.output_folder_path, exist_ok=True)
 
-        self.init_logging()        
+        self.init_logging()
+        logging.debug(f'input_file_path: {self.input_file_path}')
         logging.debug(f'num_dist_coords: {self.num_dist_coords}')
         logging.debug(f'leader_rank: {self.leader_rank}')
         logging.debug(f'temp_folder_path: {self.temp_folder_path}')
@@ -73,16 +72,19 @@ class Leader:
         ### TBD ### select split coordinator with priority
         self.next_split_rank = 0
         # logging.debug(f'init done!')
+        
+        if self.get_model_flag:
+            self.model = None
     
     def init_params(self):    
         arg_parser = argparse.ArgumentParser()
         common_args = arg_parser.add_argument_group('Common Arguments')
         common_args.add_argument('--temp-dir', type=str, required=True,
                                 help='temp dir path')
-        common_args.add_argument('--solver', type=str, required=True,
-                                help="solver path")
         common_args.add_argument('--output-dir', type=str, required=True,
                                 help='output dir path')
+        common_args.add_argument('--get-model-flag', type=int, required=True,
+                                help='get model flag')
         
         leader_args = arg_parser.add_argument_group('Leader Arguments')
         leader_args.add_argument('--file', type=str, required=True,
@@ -91,17 +93,20 @@ class Leader:
                                 help='time limit, 0 means no limit')
         
         coordinator_args = arg_parser.add_argument_group('Coordinator Arguments')
+        coordinator_args.add_argument('--solver', type=str, required=True,
+                                help="solver path")
         coordinator_args.add_argument('--partitioner', type=str, required=True,
                                 help='partitioner path')
         coordinator_args.add_argument('--available-cores-list', type=str, required=True, 
                                 help='available cores list')
         
         cmd_args = arg_parser.parse_args()
-        self.input_file_path: str = cmd_args.file
-        self.solver_path: str = cmd_args.solver
         self.temp_folder_path: str = cmd_args.temp_dir
-        self.time_limit: int = cmd_args.time_limit
         self.output_folder_path: str = cmd_args.output_dir
+        self.get_model_flag: bool = bool(cmd_args.get_model_flag)
+        
+        self.input_file_path: str = cmd_args.file
+        self.time_limit: int = cmd_args.time_limit
         
         if not os.path.exists(self.input_file_path):
             print('file-not-found')
@@ -147,21 +152,26 @@ class Leader:
         self.coordinators[coord_rank].node_solved()
         self.idle_coordinators.append(coord_rank)
     
-    def process_distributed_notified_result(self, src):
-        result = MPI.COMM_WORLD.recv(source=src, tag=2)
-        node = self.coordinators[src].assigned
-        logging.info(f'solved: node-{node.id} is {result}')
-        self.tree.node_partial_solved(node, result)
-        # self.tree.log_display()
-        if self.is_done():
+    def process_notified_result(self, src: int):
+        result, model = MPI.COMM_WORLD.recv(source=src, tag=2)
+        if self.get_model_flag and result.is_sat():
+            assert(model is not None)
+            self.model = model
+        else:
+            assert(model is None)
+        if src == self.isolated_rank:
+            logging.info(f'solved-by-isolated: {result}')
+            self.tree.original_solved(result)
             return True
-        self.set_coordinator_idle(src)
-        return False
-    
-    def process_isolated_notified_result(self):
-        result = MPI.COMM_WORLD.recv(source=self.isolated_rank, tag=2)
-        logging.info(f'solved-by-isolated: {result}')
-        self.tree.original_solved(result)
+        else:
+            node = self.coordinators[src].assigned
+            logging.info(f'solved: node-{node.id} is {result}')
+            self.tree.node_partial_solved(node, result)
+            # self.tree.log_display()
+            if self.is_done():
+                return True
+            self.set_coordinator_idle(src)
+            return False
     
     def check_coordinators(self):
         msg_status = MPI.Status()
@@ -184,12 +194,8 @@ class Leader:
             elif msg_type.is_notify_result():
                 # coordinator {src} solved the assigned task
                 logging.debug(f'receive {msg_type} message from coordinator-{src}')
-                if src == self.isolated_rank:
-                    self.process_isolated_notified_result()
+                if self.process_notified_result(src):
                     return True
-                else:
-                    if self.process_distributed_notified_result(src):
-                        return True
             elif msg_type.is_notify_error():
                 logging.error(f'receive {msg_type} message from coordinator-{src}')
                 raise CoordinatorErrorMessage()
@@ -212,7 +218,7 @@ class Leader:
         os.makedirs(target_path, exist_ok=True)
         shutil.copyfile(self.input_file_path, 
                         f'{target_path}/task-root.smt2')
-        MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
+        MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node,
                             dest=self.isolated_rank, tag=1)
     
     def get_next_idle_coordinator(self):
@@ -277,23 +283,24 @@ class Leader:
     
     def setup_distributed_solving(self):
         self.init_coord_0()
+        msg_status = MPI.Status()
         while True:
-            if MPI.COMM_WORLD.Iprobe(source=self.isolated_rank, tag=1):
-                msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=self.isolated_rank, tag=1)
-                assert(msg_type.is_notify_result())
-                self.process_isolated_notified_result()
-                return True
-            if MPI.COMM_WORLD.Iprobe(source=0, tag=1):
-                msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=0, tag=1)
-                if msg_type.is_pre_partition_done():
-                    self.pre_partition()
-                    return False
-                elif msg_type.is_notify_result():
-                    # coordinator {src} solved the assigned task
-                    if self.process_distributed_notified_result(0):
-                        return True
-                else:
-                    assert(False)
+            if not MPI.COMM_WORLD.Iprobe(source=MPI.ANY_SOURCE, tag=1, status=msg_status):
+                continue
+            src = msg_status.Get_source()
+            msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=src, tag=1)
+            logging.debug(f'receive {msg_type} message from coordinator-{src}')
+            if msg_type.is_notify_result():
+                # coordinator {src} solved the assigned task
+                if self.process_notified_result(src):
+                    return True
+            elif msg_type.is_notify_error():
+                raise CoordinatorErrorMessage()
+            elif msg_type.is_pre_partition_done():
+                self.pre_partition()
+                return False
+            else:
+                assert(False)
     
     def solve(self):
         self.init_coord_isolated()
@@ -350,6 +357,9 @@ class Leader:
         execution_time = end_time - self.start_time
         
         print(result)
+        if self.get_model_flag and result == 'sat':
+            assert(self.model is not None)
+            print(self.model)
         print(execution_time)
         logging.info(f'result: {result}, time: {execution_time}')
         

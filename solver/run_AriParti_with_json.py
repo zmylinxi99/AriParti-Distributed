@@ -12,9 +12,9 @@ def generate_random_string(length):
     return ''.join(random.choice(characters) for _ in range(length))
 
 def get_logic(file):
-    with open(file, "r") as f:
+    with open(file, 'r') as f:
         content = f.read()
-        m = re.search("set-logic ([A-Z_]+)", content) 
+        m = re.search('set-logic ([A-Z_]+)', content) 
         if m: 
             return m[1]
     return None
@@ -31,6 +31,11 @@ def select_solver_for_logic(logic: str):
         return 'z3-4.12.1-bin'
     else:
         assert(False)
+
+def check_get_model_flag(file):
+    with open(file, 'r') as f:
+        content = f.read()
+        return int(content.find(r'(get-model)') != -1)
 
 if __name__ == '__main__':
     output_total_time = True
@@ -55,6 +60,8 @@ if __name__ == '__main__':
     # base_solver = 'z3pp-at-smt-comp-2023-bin'
     # base_solver = 'z3-4.12.1-bin'
     base_solver = 'cvc5-1.0.8-bin'
+    
+    get_model_flag: int = check_get_model_flag(formula_file)
     
     output_dir = request_directory
     script_path = os.path.abspath(__file__)
@@ -95,23 +102,25 @@ if __name__ == '__main__':
     
     cmd_paras.extend([
         f'python3 {script_dir}/AriParti.py',
+        # common parameters
+        f'--temp-dir {temp_folder_path}',
+        f'--output-dir {output_dir}',
+        f'--get-model-flag {get_model_flag}',
         # leader parameters
         f'--file {formula_file}',
-        f'--output-dir {output_dir}',
-        f'--temp-dir {temp_folder_path}',
         f'--time-limit {solving_time_limit}',
         # coordinator parameters
         # f'--temp-dir {temp_folder_path}',
+        f'--solver {script_dir}/binary-files/{base_solver}',
         f'--available-cores-list "{json.dumps(worker_node_cores)}"',
         ##//linxi-test
         f'--partitioner {script_dir}/binary-files/partitioner-bin',
         # f'--partitioner {script_dir}/partitioner/build/z3',
-        f'--solver {script_dir}/binary-files/{base_solver}',
     ])
     
     cmd = ' '.join(cmd_paras)
     # ##//linxi-test
-    # print(f"command:\n{cmd}")
+    # print(f'command:\n{cmd}')
     
     result = subprocess.run(
         cmd,
@@ -122,12 +131,12 @@ if __name__ == '__main__':
     
     # ##//linxi-test
     # print(f'stdout:')
-    # print(result.stdout.decode("utf-8"))
+    # print(result.stdout.decode('utf-8'))
     # print(f'stderr:')
-    # print(result.stderr.decode("utf-8"))
+    # print(result.stderr.decode('utf-8'))
     
-    sys.stdout.write(result.stdout.decode("utf-8"))
-    sys.stderr.write(result.stderr.decode("utf-8"))
+    sys.stdout.write(result.stdout.decode('utf-8'))
+    sys.stderr.write(result.stderr.decode('utf-8'))
     
     if output_total_time:
         end_time = time.time()

@@ -16,7 +16,6 @@ from partition_tree import NodeStatus, NodeReason
 from control_message import TerminateMessage, ControlMessage
 from partitioner import Partitioner
 
-
 def raise_error(error_info):
     logging.error(error_info)
     raise Exception(error_info)
@@ -54,6 +53,10 @@ class Coordinator:
         self.num_dist_coords = self.isolated_rank
         self.init_params()
         
+        if self.get_model_flag:
+            self.model = ''
+            self.get_model_done = False
+        
         self.coord_temp_folder_path = f'{self.temp_dir}/Coordinator-{self.rank}'
         # assign a core to coordinator and partitioner
         self.available_cores -= 1
@@ -68,6 +71,7 @@ class Coordinator:
         self.tree = None
         
         logging.debug(f'rank: {self.rank}, leader_rank: {self.leader_rank}')
+        logging.debug(f'get-model-flag: {self.get_model_flag}')
         logging.debug(f'temp_folder_path: {self.coord_temp_folder_path}')
         logging.debug(f'coordinator-{self.rank} init done!')
     
@@ -89,10 +93,10 @@ class Coordinator:
         common_args = arg_parser.add_argument_group('Common Arguments')
         common_args.add_argument('--temp-dir', type=str, required=True,
                                 help='temp dir path')
-        common_args.add_argument('--solver', type=str, required=True,
-                                help="solver path")
         common_args.add_argument('--output-dir', type=str, required=True,
                                 help='output dir path')
+        common_args.add_argument('--get-model-flag', type=int, required=True,
+                                help='get model flag')
         
         leader_args = arg_parser.add_argument_group('Leader Arguments')
         leader_args.add_argument('--file', type=str, required=True,
@@ -101,21 +105,23 @@ class Coordinator:
                                 help='time limit, 0 means no limit')
         
         coordinator_args = arg_parser.add_argument_group('Coordinator Arguments')
+        coordinator_args.add_argument('--solver', type=str, required=True,
+                                help="solver path")
         coordinator_args.add_argument('--partitioner', type=str, required=True,
                                 help='partitioner path')
         coordinator_args.add_argument('--available-cores-list', type=str, required=True, 
                                 help='available cores list')
         
         cmd_args = arg_parser.parse_args()
-        self.partitioner_path: str = cmd_args.partitioner
         self.solver_path: str = cmd_args.solver
-        self.temp_dir: str = cmd_args.temp_dir
         self.output_folder_path: str = cmd_args.output_dir
+        self.temp_dir: str = cmd_args.temp_dir
+        self.get_model_flag: bool = int(cmd_args.get_model_flag)
         
+        self.partitioner_path: str = cmd_args.partitioner
         available_cores_list: list = json.loads(cmd_args.available_cores_list)
         
         self.available_cores: int = available_cores_list[self.rank]
-        
     
     def is_done(self):
         if self.result.is_solved():
@@ -141,7 +147,7 @@ class Coordinator:
         words = msg.split(' ')
         if words[0] in ['sat', 'unsat', 'unknown']:
             result = words[0]
-            self.partitioner.set_status(result)
+            self.partitioner.set_result(result)
             if result == 'sat':
                 self.result = NodeStatus.sat
             elif result == 'unsat':
@@ -183,30 +189,48 @@ class Coordinator:
                 ### TBD ###
             else:
                 assert(False)
-        
-    def receive_message_from_partitioner(self):
-        is_done = self.partitioner.check_p_status()
-        if not is_done:
-            cnt = 0
+    
+    def receive_partitioner_messages_limited(self):
+        cnt = 0
         while True:
-            if not is_done:
-                if cnt >= 16:
-                    break
-                cnt += 1
+            if cnt >= 16:
+                break
+            cnt += 1
+            logging.debug(f'receive_message begin')
             msg = self.partitioner.receive_message()
+            logging.debug(f'receive_message done')
+            logging.debug(f'partitioner-message {msg}')
+            logging.debug(f'partitioner status: {self.partitioner.status}')
+            if self.partitioner.buffer is not None:
+                logging.debug(f'partitioner buffer: {self.partitioner.buffer}')
+                logging.debug(f'partitioner buffer_head: {self.partitioner.buffer_head}')
+                logging.debug(f'partitioner buffer_tail: {self.partitioner.buffer_tail}')
             if msg == None:
                 break
+            msg: str
             msg = msg.strip(' \n')
             if msg == '':
-                break
+                continue
             logging.debug(f'partitioner-message {msg}')
-            self.process_partitioner_msg(msg)
-            if self.partitioner.is_done():
+            if self.get_model_flag and self.partitioner.result.is_sat():
+                self.model += msg + '\n'
+            else:
+                self.process_partitioner_msg(msg)
+        if self.get_model_flag and self.partitioner.is_receive_done():
+            self.get_model_done = True
+    
+    def receive_partitioner_messages(self):
+        logging.debug(f'receive_partitioner_messages begin')
+        if self.partitioner.is_receive_done():
+            logging.debug(f'receive_partitioner_messages done')
+            return
+        if self.partitioner.is_running():
+            self.partitioner.check_p_status()
+        while True:
+            self.receive_partitioner_messages_limited()
+            if not self.partitioner.is_process_done():
                 break
-            # if self.is_done():
-            #     break
-        if is_done:
-            assert(self.partitioner.is_done())
+        logging.debug(f'receive_partitioner_messages done')
     
     def check_subprocess_status(self, p: subprocess.Popen):
         rc = p.poll()
@@ -214,7 +238,6 @@ class Coordinator:
             return NodeStatus.solving
 
         out_data, err_data = p.communicate()
-        
         if rc != 0:
             logging.error('subprocess error')
             logging.error(f'return code = {rc}')
@@ -223,8 +246,15 @@ class Coordinator:
             return NodeStatus.error
             # raise_error(f'return code = {rc}\nstdout: {out_data}\nstderr: {err_data}')
 
-        sta: str = out_data.strip('\n').strip(' ')
         assert(rc == 0)
+        if self.get_model_flag:
+            lines = out_data.split('\n')
+            sta: str = lines[0]
+            if sta == 'sat':
+                self.model: str = '\n'.join(lines[1: ])
+                self.get_model_done = True
+        else:
+            sta: str = out_data.strip('\n').strip(' ')
         if sta == 'sat':
             return NodeStatus.sat
         elif sta == 'unsat':
@@ -242,8 +272,6 @@ class Coordinator:
         self.partitioner.send_message(msg)
     
     def sync_ended_to_partitioner(self, node: ParallelNode, status: NodeStatus):
-        if self.partitioner.check_p_status():
-            return
         if status.is_unsat():
             sta_val = ControlMessage.C2P.unsat_node.value
         else:
@@ -268,9 +296,6 @@ class Coordinator:
                 else:
                     child_progress += 1
             if num_children > 1:
-                # rc: ParallelNode = node.children[1]
-                # if not rc.status.is_unsolved():
-                #     num_start += 1
                 rc_sta: NodeStatus = node.children[1].status
                 if not rc_sta.is_unsolved():
                     if rc_sta.is_solved():
@@ -280,10 +305,6 @@ class Coordinator:
         assert(child_progress < 4)
         solving_time = self.tree.get_node_solving_time(node)
         assert(solving_time is not None)
-        # if solving_time < self.terminate_threshold[num_start]:
-        #     return False
-        # return True
-        # return solving_time > self.terminate_threshold[num_start]
         return solving_time > self.terminate_threshold[child_progress]
     
     def terminate_node(self, node: ParallelNode):
@@ -302,8 +323,6 @@ class Coordinator:
             self.terminate_node(node)
             return False
         if sta.is_solving():
-            # return True
-            # ### TBD ###
             if not self.need_terminate(node):
                 return True
             logging.info(f'terminate on demand')
@@ -312,8 +331,6 @@ class Coordinator:
         node.assign_to = None
         logging.info(f'solved: node-{node.id} is {sta}')
         self.tree.node_solved(node, sta)
-        # if self.tree.update_dict.get((NodeStatus.unsat, NodeReason.itself), 0) % 10 == 0:
-        #     self.log_tree_infos()
         self.log_tree_infos()
         if self.is_done():
             return False
@@ -361,7 +378,7 @@ class Coordinator:
                       f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.children), 0)}(children), '
                       f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.ancester), 0)}(ancester), '
                       f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.partitioner), 0)}(partitioner), '
-                      f'progress: {self.tree.root.unsat_percent * 100.0:.2f}%'
+                      f'progress: {self.tree.root.unsat_percent * 100.0 :.2f}%'
                     #   f'endeds: {self.tree.get_ended_number()}, '
                     #   f'unendeds: {self.tree.get_unended_number()}'
                 )
@@ -382,12 +399,14 @@ class Coordinator:
             parti_seed = 0
         else:
             parti_seed = 1
+        # parti_seed = self.rank
         
         cmd =  [self.partitioner_path,
                 f'{self.solving_folder_path}/task-root.smt2',
                 f'-outputdir:{self.solving_folder_path}',
                 f'-partimrt:{max(self.available_cores, self.num_dist_coords)}',
-                f'-partiseed:{parti_seed}'
+                f'-partiseed:{parti_seed}',
+                f'-getmodelflag:{int(self.get_model_flag)}'
             ]
         logging.debug(f'exec-command {" ".join(cmd)}')
         p = subprocess.Popen(
@@ -417,15 +436,18 @@ class Coordinator:
     def send_result_to_leader(self):
         result: NodeStatus = self.get_result()
         assert(result.is_solved())
-        
+        model = None
+        if self.get_model_flag and result.is_sat():
+            assert(self.get_model_done)
+            model = self.model
         MPI.COMM_WORLD.send(ControlMessage.C2L.notify_result,
                             dest=self.leader_rank, tag=1)
-        MPI.COMM_WORLD.send(result, dest=self.leader_rank, tag=2)
+        MPI.COMM_WORLD.send((result, model), dest=self.leader_rank, tag=2)
     
     # True -> solved
     def parallel_solving(self):
-        if self.partitioner.is_running():
-            self.receive_message_from_partitioner()
+        self.receive_partitioner_messages()
+        if self.partitioner.is_receive_done():
             if self.is_done():
                 return True
         if self.check_solvings_status():
@@ -455,10 +477,10 @@ class Coordinator:
         subnodes = deque()
         while True:
             self.receive_message_from_leader()
-            self.receive_message_from_partitioner()
-            if self.is_done():
-                return True
-            if self.partitioner.is_done():
+            self.receive_partitioner_messages()
+            if self.partitioner.is_receive_done():
+                if self.is_done():
+                    return True
                 break
             if len(subnodes) == 0:
                 if self.tree.root != None:
@@ -486,8 +508,8 @@ class Coordinator:
                             dest=self.leader_rank, tag=1)
         MPI.COMM_WORLD.send(pp_num_nodes, 
                             dest=self.leader_rank, tag=2)
-        msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
-        assert(isinstance(msg_type, ControlMessage.L2C))
+        msg_type: ControlMessage.L2C = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
+        # assert(isinstance(msg_type, ControlMessage.L2C))
         if msg_type.is_assign_node():
             for i in range(1, pp_num_nodes):
                 node = subnodes[i]

@@ -303,6 +303,9 @@ static void parse_cmd_line_args(std::string& input_file, int argc, char ** argv)
             else if (strcmp(opt_name, "partiseed") == 0) {
                 gparams::set("partition_rand_seed", opt_arg);
             }
+            else if (strcmp(opt_name, "getmodelflag") == 0) {
+                gparams::set("get_model_flag", opt_arg);
+            }
             else {
                 std::cerr << "Error: invalid command line option: " << arg << "\n";
                 std::cerr << "For usage information: z3 -h\n";

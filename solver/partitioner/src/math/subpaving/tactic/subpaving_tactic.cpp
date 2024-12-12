@@ -73,6 +73,7 @@ class subpaving_tactic : public tactic {
         expr_ref_vector                 m_task_expr_clauses;
         std::string                     m_output_dir;
         unsigned                        m_max_running_tasks;
+        bool                            m_get_model_flag;
         unsigned m_int_var_num;
         unsigned m_nl_val_num;
         symbol m_logic;
@@ -431,7 +432,9 @@ class subpaving_tactic : public tactic {
                 pp.add_assumption(m_task_expr_clauses[i].get());
             }
             pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
-
+            if (m_get_model_flag) {
+                ofs << "(get-model)\n";
+            }
             m_task_expr_clauses.reset();
         }
         
@@ -462,6 +465,7 @@ class subpaving_tactic : public tactic {
             const params_ref &p = gparams::get_ref();
             m_output_dir = p.get_str("output_dir", "ERROR");
             m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
+            m_get_model_flag = static_cast<bool>(p.get_uint("get_model_flag", 0));
         }
 
         void process(goal_ref const & g, 
