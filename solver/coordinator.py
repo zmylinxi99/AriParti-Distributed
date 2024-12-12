@@ -192,23 +192,13 @@ class Coordinator:
     
     def receive_partitioner_messages_limited(self):
         cnt = 0
-        while True:
+        while not self.partitioner.is_receive_done():
             if cnt >= 16:
                 break
             cnt += 1
-            logging.debug(f'receive_message begin')
             msg = self.partitioner.receive_message()
-            logging.debug(f'receive_message done')
-            logging.debug(f'partitioner-message {msg}')
-            logging.debug(f'partitioner status: {self.partitioner.status}')
-            if self.partitioner.buffer is not None:
-                logging.debug(f'partitioner buffer: {self.partitioner.buffer}')
-                logging.debug(f'partitioner buffer_head: {self.partitioner.buffer_head}')
-                logging.debug(f'partitioner buffer_tail: {self.partitioner.buffer_tail}')
             if msg == None:
                 break
-            msg: str
-            msg = msg.strip(' \n')
             if msg == '':
                 continue
             logging.debug(f'partitioner-message {msg}')
@@ -220,9 +210,7 @@ class Coordinator:
             self.get_model_done = True
     
     def receive_partitioner_messages(self):
-        logging.debug(f'receive_partitioner_messages begin')
         if self.partitioner.is_receive_done():
-            logging.debug(f'receive_partitioner_messages done')
             return
         if self.partitioner.is_running():
             self.partitioner.check_p_status()
@@ -230,7 +218,6 @@ class Coordinator:
             self.receive_partitioner_messages_limited()
             if not self.partitioner.is_process_done():
                 break
-        logging.debug(f'receive_partitioner_messages done')
     
     def check_subprocess_status(self, p: subprocess.Popen):
         rc = p.poll()

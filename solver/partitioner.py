@@ -44,8 +44,6 @@ class Partitioner:
         self.p: subprocess.Popen = p
         self.status = PartitionerStatus.running
         self.result = PartitionerResult.unsolved
-        self.partial_line = None
-        self.buffer = None
     
     def is_running(self):
         return self.status.is_running()
@@ -90,44 +88,14 @@ class Partitioner:
         self.p.stdin.write(msg + '\n')
         self.p.stdin.flush()
     
-    def read_from_process(self):
+    def receive_message(self):
         ready, _, _ = select.select([self.p.stdout], [], [], 0.01)
         if ready:
-            data = self.p.stdout.read()
-            if self.status.is_process_done() and data == '':
+            line: str = self.p.stdout.readline()
+            if self.status.is_process_done() and line == '':
                 self.status = PartitionerStatus.receive_done
-                return False
-            self.buffer = data
-            self.buffer_head = 0
-            self.buffer_tail = len(self.buffer)
-            return True
-        return False
-    
-    def receive_message(self):
-        if self.buffer is None:
-            if not self.read_from_process():
-                if self.status.is_receive_done():
-                    # None or partial line
-                    ret = self.partial_line
-                    self.partial_line = None
-                    return ret
-                return None
-        last_head = self.buffer_head
-        while self.buffer_head < self.buffer_tail:
-            if self.buffer[self.buffer_head] == '\n':
-                if self.partial_line is None:
-                    ret = self.buffer[last_head: self.buffer_head]
-                else:
-                    ret = self.partial_line + self.buffer[last_head: self.buffer_head]
-                    self.partial_line = None
-                self.buffer_head += 1
-                return ret
-            self.buffer_head += 1
-
-        if last_head != self.buffer_tail:
-            if self.partial_line is None:
-                self.partial_line = self.buffer[last_head: self.buffer_tail]
-            else:
-                self.partial_line += self.buffer[last_head: self.buffer_tail]
-        self.buffer = None
+                return self.p.stdout.read()
+            line = line.strip(' \n')
+            logging.debug(f'line: {line}')
+            return line
         return None
