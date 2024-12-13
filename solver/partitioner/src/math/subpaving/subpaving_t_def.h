@@ -203,11 +203,6 @@ void context_t<C>::monomial::display(std::ostream & out, display_var_proc const 
 template<typename C>
 void context_t<C>::polynomial::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc, bool use_star) const {
     bool first = true;
-    if (!nm.is_zero(m_c)) {
-        out << nm.to_rational_string(m_c);
-        first = false;
-    }
-
     for (unsigned i = 0; i < m_size; i++) {
         if (first)
             first = false;
@@ -570,7 +565,7 @@ bool context_t<C>::is_int(polynomial const * p) const {
             return false;
         }
     }
-    return nm().is_int(p->c());
+    return true;
 }
 
 template<typename C>
@@ -622,13 +617,12 @@ void context_t<C>::del_sum(polynomial * p) {
     for (unsigned i = 0; i < sz; i++) {
         nm().del(p->m_as[i]);
     }
-    nm().del(p->m_c);
     p->~polynomial();
     allocator().deallocate(mem_sz, p);
 }
 
 template<typename C>
-var context_t<C>::mk_sum(numeral const & c, unsigned sz, numeral const * as, var const * xs) {
+var context_t<C>::mk_sum(unsigned sz, numeral const * as, var const * xs) {
     m_num_buffer.reserve(num_vars());
     for (unsigned i = 0; i < sz; i++) {
         SASSERT(xs[i] < num_vars());
@@ -638,7 +632,6 @@ var context_t<C>::mk_sum(numeral const & c, unsigned sz, numeral const * as, var
     void * mem       = allocator().allocate(mem_sz);
     polynomial * p   = new (mem) polynomial();
     p->m_size        = sz;
-    nm().set(p->m_c, c);
     p->m_as          = reinterpret_cast<numeral*>(static_cast<char*>(mem) + sizeof(polynomial));
     p->m_xs          = reinterpret_cast<var*>(reinterpret_cast<char*>(p->m_as) + sizeof(numeral)*sz);
     memcpy(p->m_xs, xs, sizeof(var)*sz);
@@ -2507,7 +2500,7 @@ void context_t<C>::select_best_var(node * n) {
             }
             else {
                 nm().add(u->value(), m_unbounded_penalty, width);
-                // u >= 0: penalty + r
+                // u >= 0: penalty + u
             }
         }
         else if (u == nullptr) {

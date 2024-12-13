@@ -154,7 +154,7 @@ struct expr2subpaving::imp {
         m_cached_denominators.push_back(d);
     }
 
-    subpaving::var process_num(app * t, unsigned depth, mpz & n, mpz & d) {
+    subpaving::var process_num(app * t, unsigned depth, mpz & n, mpz & d, mpq & qk) {
         rational k;
         VERIFY(m_autil.is_numeral(t, k));
         qm().set(n, k.to_mpq().numerator());
@@ -180,7 +180,7 @@ struct expr2subpaving::imp {
         }
     }
 
-    subpaving::var process_mul(app * t, unsigned depth, mpz & n, mpz & d) {
+    subpaving::var process_mul(app * t, unsigned depth, mpz & n, mpz & d, mpq & qk) {
         TRACE("linxi_subpaving",
             tout << "before process_mul poly: " << mk_smt_pp(t, m()) << "\n";
         );
@@ -218,7 +218,7 @@ struct expr2subpaving::imp {
             expr * arg = margs[i];
             unsigned k;
             as_power(arg, arg, k);
-            subpaving::var x_arg = process(arg, depth+1, n_arg, d_arg);
+            subpaving::var x_arg = process(arg, depth+1, n_arg, d_arg, qk);
             qm().power(n_arg, k, n_arg);
             qm().power(d_arg, k, d_arg);
             qm().mul(n, n_arg, n);
@@ -240,15 +240,16 @@ struct expr2subpaving::imp {
                     pws[j].degree() += pws[i].degree();
                 }
                 else {
-                    j++;
+                    ++j;
                     SASSERT(j <= i);
                     pws[j] = pws[i];
                 }
             }
             psz = j + 1;
             pws.resize(psz);
-            if (psz == 1 && pws[0].degree() == 1)
+            if (psz == 1 && pws[0].degree() == 1) {
                 x = pws[0].get_var();
+            }
             else {
                 // expr_ref v(m_manager), deg(m_manager), pw(m_manager), mono(m_manager);
                 expr_ref v(m_manager), pw(m_manager), mono(m_manager);
@@ -292,11 +293,11 @@ struct expr2subpaving::imp {
     typedef _scoped_numeral_buffer<unsynch_mpz_manager> mpz_buffer;
     typedef sbuffer<subpaving::var> var_buffer;
 
-    subpaving::var process_add(app * t, unsigned depth, mpz & n, mpz & d) {
+    subpaving::var process_add(app * t, unsigned depth, mpz & n, mpz & d, mpq & qk) {
         TRACE("linxi_subpaving",
             tout << "old poly: " << mk_smt_pp(t, m()) << "\n";
         );
-
+        
         unsigned num_args = t->get_num_args();
         mpz_buffer ns(qm()), ds(qm());
         var_buffer xs;
@@ -305,7 +306,7 @@ struct expr2subpaving::imp {
         scoped_mpz n_arg(qm()), d_arg(qm());
         for (unsigned i = 0; i < num_args; i++) {
             expr * arg           = t->get_arg(i);
-            subpaving::var x_arg = process(arg, depth+1, n_arg, d_arg);
+            subpaving::var x_arg = process(arg, depth+1, n_arg, d_arg, qk);
             if (x_arg == subpaving::null_var) {
                 qm().set(c_arg, n_arg, d_arg);
                 qm().add(c, c_arg, c);
@@ -316,55 +317,45 @@ struct expr2subpaving::imp {
                 ds.push_back(d_arg);
             }
         }
-        qm().set(d,  c.get().denominator());
+        qm().set(qk, c);
+
         unsigned sz = xs.size();
-        for (unsigned i = 0; i < sz; i++) {
-            qm().lcm(d, ds[i], d);
-        }
-        scoped_mpz & k = d_arg;
-        qm().div(d, c.get().denominator(), k);
-        scoped_mpz sum_c(qm());
-        qm().mul(c.get().numerator(), k, sum_c);
-        for (unsigned i = 0; i < sz; i++) {
-            qm().div(d, ds[i], k);
-            qm().mul(ns[i], k, ns[i]);
-        }
+        
         subpaving::var x;
         if (sz == 0) {
-            qm().set(n, sum_c);
+            qm().set(n, 0);
+            qm().set(d, 1);
             x = subpaving::null_var;
         }
         else {
+            qm().set(d, 1);
+            for (unsigned i = 0; i < sz; i++) {
+                qm().lcm(d, ds[i], d);
+            }
+            scoped_mpz & k = d_arg;
+            for (unsigned i = 0; i < sz; i++) {
+                qm().div(d, ds[i], k);
+                qm().mul(ns[i], k, ns[i]);
+            }
             scoped_mpz ng(qm());
             qm().set(ng, ns[0]);
             for (unsigned i = 1; i < sz; ++i)
                 qm().gcd(ng, ns[i], ng);
-            if (!qm().is_zero(sum_c))
-                qm().gcd(ng, sum_c, ng);
             
             TRACE("linxi_subpaving",
                 tout << "gcd: ";
                 qm().display(tout, ng);
-                tout << "\n";  
+                tout << "\n";
             );
             
             if (qm().gt(ng, 1)) {
                 for (unsigned i = 0; i < sz; ++i)
                     qm().div(ns[i], ng, ns[i]);
-                if (!qm().is_zero(sum_c))
-                    qm().div(sum_c, ng, sum_c);
             }
             
-
             struct mono_lt {
-                // mpz_buffer &m_ns;
                 var_buffer &m_xs;
-                // mono_lt(mpz_buffer &_ns, var_buffer &_xs) :
-                //     m_ns(_ns), m_xs(_xs)
-                mono_lt(var_buffer &_xs) :
-                    m_xs(_xs)
-                {
-                }
+                mono_lt(var_buffer &_xs): m_xs(_xs) {}
                 bool operator()(unsigned x, unsigned y) const {
                     return m_xs[x] < m_xs[y];
                 }
@@ -383,7 +374,7 @@ struct expr2subpaving::imp {
             for (unsigned i = 0; i < sz; ++i) {
                 unsigned id = ids[i];
                 tx = m_var2expr[xs[id]].get();
-                if (ns[id] == 1) {
+                if (qm().is_one(ns[id])) {
                     mono = tx;
                 }
                 else {
@@ -399,19 +390,13 @@ struct expr2subpaving::imp {
                     tout << mk_smt_pp(mono, m_manager) << "\n";
                 );
             }
-            if (!qm().is_zero(sum_c)) {
-                if (m_int_var_num > 0)
-                    m_expr_buffer.push_back(m_autil.mk_int(rational(sum_c)));
-                else
-                    m_expr_buffer.push_back(m_autil.mk_real(rational(sum_c)));
-            }
             poly = m_autil.mk_add(m_expr_buffer.size(), m_expr_buffer.data());
             m_expr_buffer.reset();
 
             expr *pp = poly.get();
             x = m_expr2var->to_var(pp);
             if (x == subpaving::null_var) {
-                x = s().mk_sum(sum_c, sz, ns.data(), xs.data());
+                x = s().mk_sum(sz, ns.data(), xs.data());
                 update_ev_map(pp, x);
             }
 
@@ -421,7 +406,7 @@ struct expr2subpaving::imp {
         return x;
     }
 
-    subpaving::var process_power(app * t, unsigned depth, mpz & n, mpz & d) {
+    subpaving::var process_power(app * t, unsigned depth, mpz & n, mpz & d, mpq & qk) {
         rational k;
         SASSERT(t->get_num_args() == 2);
         if (!m_autil.is_numeral(t->get_arg(1), k) || !k.is_int() || !k.is_unsigned() || k.is_zero()) {
@@ -430,7 +415,7 @@ struct expr2subpaving::imp {
             return mk_var_for(t);
         }
         unsigned _k = k.get_unsigned();        
-        subpaving::var x = process(t->get_arg(0), depth+1, n, d);
+        subpaving::var x = process(t->get_arg(0), depth+1, n, d, qk);
         expr *ev = t->get_arg(0);
         if (x != subpaving::null_var) {
             // expr_ref deg(m_manager), pw(m_manager);
@@ -462,42 +447,22 @@ struct expr2subpaving::imp {
         return x;
     }
 
-    // subpaving::var process_power(app * t, unsigned depth, mpz & n, mpz & d) {
-    //     rational k;
-    //     SASSERT(t->get_num_args() == 2);
-    //     if (!m_autil.is_numeral(t->get_arg(1), k) || !k.is_int() || !k.is_unsigned() || k.is_zero()) {
-    //         qm().set(n, 1);
-    //         qm().set(d, 1);
-    //         return mk_var_for(t);
-    //     }
-    //     unsigned _k = k.get_unsigned();        
-    //     subpaving::var x = process(t->get_arg(0), depth+1, n, d);
-    //     if (x != subpaving::null_var) {
-    //         subpaving::power p(x, _k);
-    //         x = s().mk_monomial(1, &p);
-    //     }
-    //     qm().power(n, _k, n);
-    //     qm().power(d, _k, d);
-    //     cache_result(t, x, n, d);
-    //     return x;
-    // }
-
-    subpaving::var process_arith_app(app * t, unsigned depth, mpz & n, mpz & d) {
+    subpaving::var process_arith_app(app * t, unsigned depth, mpz & n, mpz & d, mpq & qk) {
         SASSERT(m_autil.is_arith_expr(t));
 
         switch (t->get_decl_kind()) {
         case OP_NUM:
-            return process_num(t, depth, n, d);
+            return process_num(t, depth, n, d, qk);
         case OP_ADD:
-            return process_add(t, depth, n, d);
+            return process_add(t, depth, n, d, qk);
         case OP_MUL:
-            return process_mul(t, depth, n, d);
+            return process_mul(t, depth, n, d, qk);
         case OP_POWER:
-            return process_power(t, depth, n, d);
+            return process_power(t, depth, n, d, qk);
         case OP_TO_REAL:
-            return process(t->get_arg(0), depth + 1, n, d);
+            return process(t->get_arg(0), depth + 1, n, d, qk);
         case OP_TO_INT:
-            return process(t->get_arg(0), depth + 1, n, d);
+            return process(t->get_arg(0), depth + 1, n, d, qk);
         case OP_SUB:
         case OP_UMINUS:
             found_non_simplified();
@@ -532,7 +497,7 @@ struct expr2subpaving::imp {
         return subpaving::null_var;
     }
 
-    subpaving::var process(expr * t, unsigned depth, mpz & n, mpz & d) {
+    subpaving::var process(expr * t, unsigned depth, mpz & n, mpz & d, mpq & qk) {
         SASSERT(is_int_real(t));
         checkpoint();
 
@@ -550,7 +515,7 @@ struct expr2subpaving::imp {
             return mk_var_for(t);
         }
 
-        return process_arith_app(to_app(t), depth, n, d);
+        return process_arith_app(to_app(t), depth, n, d, qk);
     }
 
     bool is_var(expr * t) const {
@@ -562,8 +527,8 @@ struct expr2subpaving::imp {
         int_var_num = m_int_var_num;
     }
 
-    subpaving::var internalize_term(expr * t, mpz & n, mpz & d) {
-        return process(t, 0, n, d);
+    subpaving::var internalize_term(expr * t, mpz & n, mpz & d, mpq & qk) {
+        return process(t, 0, n, d, qk);
     }
 
     subpaving::var internalize_bool_term(expr * t) {
@@ -596,8 +561,8 @@ bool expr2subpaving::is_var(expr * t) const {
     return m_imp->is_var(t);
 }
 
-subpaving::var expr2subpaving::internalize_term(expr * t, mpz & n, mpz & d) {
-    return m_imp->internalize_term(t, n, d);
+subpaving::var expr2subpaving::internalize_term(expr * t, mpz & n, mpz & d, mpq & qk) {
+    return m_imp->internalize_term(t, n, d, qk);
 }
 
 subpaving::var expr2subpaving::internalize_bool_term(expr * t) {

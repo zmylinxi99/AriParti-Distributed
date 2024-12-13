@@ -389,7 +389,6 @@ public:
     class polynomial : public definition {
         friend class context_t;
         unsigned    m_size;
-        numeral     m_c;
         numeral *   m_as;
         var *       m_xs;
         static unsigned get_obj_size(unsigned sz) { return sizeof(polynomial) + sz*sizeof(numeral) + sz*sizeof(var); }
@@ -400,7 +399,6 @@ public:
         var x(unsigned i) const { return m_xs[i]; }
         var const * xs() const { return m_xs; }
         numeral const * as() const { return m_as; }
-        numeral const & c() const { return m_c; }
         void display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc = display_var_proc(), bool use_star = false) const;
     };
 
@@ -1020,13 +1018,14 @@ public:
     var mk_monomial(unsigned sz, power const * pws);
     
     /**
-       \brief Create the sum c + as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
-       The result is a variable y s.t. y = c + as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
+     * linxi updated, remove constant c
+       \brief Create the sum as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
+       The result is a variable y s.t. y = as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
        
        \pre sz > 0
        \pre for all i \in [0, sz-1] : as[i] != 0
     */
-    var mk_sum(numeral const & c, unsigned sz, numeral const * as, var const * xs);
+    var mk_sum(unsigned sz, numeral const * as, var const * xs);
     
     /**
        \brief Create an atom.

@@ -93,9 +93,10 @@ class Partitioner:
         if ready:
             line: str = self.p.stdout.readline()
             if self.status.is_process_done() and line == '':
+                logging.debug(f'partitioner receive_done')
                 self.status = PartitionerStatus.receive_done
                 return self.p.stdout.read()
             line = line.strip(' \n')
-            logging.debug(f'line: {line}')
+            # logging.debug(f'line: {line}')
             return line
         return None

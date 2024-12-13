@@ -166,10 +166,13 @@ class subpaving_tactic : public tactic {
             rational _k;
             if (!m_autil.is_numeral(to_app(a)->get_arg(1), _k))
                 throw tactic_exception("use simplify tactic with option :arith-lhs true");
-            scoped_mpq k(m_qm);
+            scoped_mpq k(m_qm), qk(m_qm);
             k = _k.to_mpq();
             scoped_mpz n(m_qm), d(m_qm);
-            subpaving::var x = m_e2s->internalize_term(to_app(a)->get_arg(0), n, d);
+            m_qm.set(qk, 0);
+            // n / d * x ~ qk
+            subpaving::var x = m_e2s->internalize_term(to_app(a)->get_arg(0), n, d, qk);
+            m_qm.sub(k, qk, k);
             m_qm.mul(d, k, k);
             m_qm.div(k, n, k);
             if (is_neg(n))

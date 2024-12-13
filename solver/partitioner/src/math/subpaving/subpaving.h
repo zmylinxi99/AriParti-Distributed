@@ -64,13 +64,14 @@ public:
     virtual var mk_monomial(unsigned sz, power const * pws) = 0;
     
     /**
-       \brief Create the sum c + as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
-       The result is a variable y s.t. y = c + as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
+     * linxi updated, remove constant c
+       \brief Create the sum as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
+       The result is a variable y s.t. y = as[0]*xs[0] + ... + as[sz-1]*xs[sz-1].
        
        \pre sz > 0
        \pre for all i \in [0, sz-1] : as[i] != 0
     */
-    virtual var mk_sum(mpz const & c, unsigned sz, mpz const * as, var const * xs) = 0;
+    virtual var mk_sum(unsigned sz, mpz const * as, var const * xs) = 0;
 
     /**
        \brief Create an atom.

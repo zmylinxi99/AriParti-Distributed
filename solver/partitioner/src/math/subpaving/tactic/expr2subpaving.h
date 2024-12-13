@@ -45,7 +45,7 @@ public:
 
        \remark throws subpaving::exception there is a translation error (when using imprecise representations, i.e. floats, in the subpaving module)
     */
-    subpaving::var internalize_term(expr * t, /* out */ mpz & n, /* out */ mpz & d);
+    subpaving::var internalize_term(expr * t, /* out */ mpz & n, /* out */ mpz & d, /* out */ mpq & qk);
     subpaving::var internalize_bool_term(expr * t);
 
     void collect_statistics(unsigned & nl_var_num, unsigned & int_var_num);
