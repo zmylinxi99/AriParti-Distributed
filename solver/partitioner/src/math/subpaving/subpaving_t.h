@@ -33,6 +33,7 @@ Revision History:
 #include <ostream>
 #include <queue>
 #include <random>
+#include <cmath>
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4200)
@@ -454,13 +455,17 @@ public:
     struct var_info {
         unsigned m_id;
         unsigned m_split_cnt;
+        double m_avg_split_cnt;
         // {L, R} (L < 0 or L -> -oo)
         // and    (R > 0 or R -> +oo)
         bool     m_cz; // contain zero
         unsigned m_deg; // max degree
         unsigned m_occ; // occurrence
         numeral m_width;
+        double m_width_score;
         bool m_is_too_short;
+
+        double m_score;
 
         unsigned_vector m_key_rank;
         numeral_manager & m_nm;
@@ -512,17 +517,24 @@ public:
             return false;
         }
 
+        // // lhs less than rhs means lhs is a better choice
+        // bool operator < (const var_info & rhs) const {
+        //     if (m_is_too_short != rhs.m_is_too_short)
+        //         return rhs.m_is_too_short;
+        //     for (unsigned i : m_key_rank) {
+        //         if (i == 0)
+        //             continue;
+        //         if (!key_eq(i, rhs))
+        //             return key_lt(i, rhs);
+        //     }
+        //     return false;
+        // }
+
         // lhs less than rhs means lhs is a better choice
         bool operator < (const var_info & rhs) const {
             if (m_is_too_short != rhs.m_is_too_short)
                 return rhs.m_is_too_short;
-            for (unsigned i : m_key_rank) {
-                if (i == 0)
-                    continue;
-                if (!key_eq(i, rhs))
-                    return key_lt(i, rhs);
-            }
-            return false;
+            return m_score > rhs.m_score;
         }
 
         void copy(const var_info & rhs) {
@@ -533,11 +545,27 @@ public:
             m_occ = rhs.m_occ;
             m_nm.set(m_width, rhs.m_width);
             m_is_too_short = rhs.m_is_too_short;
+            m_score = rhs.m_score;
+            m_avg_split_cnt = rhs.m_avg_split_cnt;
+            m_width_score = rhs.m_width_score;
         }
 
+        void calc_score() {
+            m_score = 1.0;
+            if (m_cz)
+                m_score *= 2.0;
+            m_score *= std::pow(2.0, m_deg);
+            m_score *= m_occ;
+            m_score /= 2.0 + m_avg_split_cnt;
+            m_score *= m_width_score;
+        }
+        
         std::string to_string() {
             std::stringstream ss;
             ss << "var info: id = " << m_id
+               << ", score = " << m_score
+               << ", width score = " << m_width_score
+               << ", avg_split_cnt = " << m_avg_split_cnt
                << ", split cnt = " << m_split_cnt
                << ", cz = " << m_cz << ", deg = " << m_deg
                << ", occ = " << m_occ

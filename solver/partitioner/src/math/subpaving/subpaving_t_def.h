@@ -30,7 +30,6 @@ Revision History:
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include <cmath>
 
 namespace subpaving {
 
@@ -2465,20 +2464,21 @@ void context_t<C>::select_best_var(node * n) {
         unsigned split_cnt = m_var_unsolved_split_cnt[x];
         double avg_split_cnt = 
             static_cast<double>(split_cnt) / static_cast<double>(m_unsolved_task_num);
-        double choose_prob = pow(m_split_prob_decay, avg_split_cnt);
+        // double choose_prob = pow(m_split_prob_decay, avg_split_cnt);
         // if (split_cnt > 0) {
         //     m_temp_stringstream << "var " << x << ", avg_split_cnt: " << avg_split_cnt
         //         << ", choose_prob: " << choose_prob << ", unsolved split cnt: " << split_cnt;
         //     write_debug_ss_line_to_coordinator();
         // }
-        if (m_best_var_info.m_id != null_var && dis(m_rand) > choose_prob)
-            continue;
+        // if (m_best_var_info.m_id != null_var && dis(m_rand) > choose_prob)
+        //     continue;
         // if (split_cnt > 0) {
         //     m_temp_stringstream << "var " << x << " is chosen";
         //     write_debug_ss_line_to_coordinator();
         // }
         m_curr_var_info.m_id = x;
         m_curr_var_info.m_split_cnt = m_var_unsolved_split_cnt[x];
+        m_curr_var_info.m_avg_split_cnt = avg_split_cnt;
         m_curr_var_info.m_cz = ((l == nullptr || nm().is_neg(l->value())) 
                              && (u == nullptr || nm().is_pos(u->value())));
         m_curr_var_info.m_deg = m_var_max_deg[x];
@@ -2488,6 +2488,7 @@ void context_t<C>::select_best_var(node * n) {
         if (l == nullptr && u == nullptr) {
             nm().set(width, m_unbounded_penalty_sq);
             // unbouned: width = penalty ^ 2
+            m_curr_var_info.m_width_score = 1.0;
         }
         else if (l == nullptr) {
             if (nm().is_neg(u->value())) {
@@ -2502,6 +2503,7 @@ void context_t<C>::select_best_var(node * n) {
                 nm().add(u->value(), m_unbounded_penalty, width);
                 // u >= 0: penalty + u
             }
+            m_curr_var_info.m_width_score = 0.95;
         }
         else if (u == nullptr) {
             if (nm().is_pos(l->value())) {
@@ -2517,18 +2519,22 @@ void context_t<C>::select_best_var(node * n) {
                 nm().add(width, m_unbounded_penalty, width);
                 // l <= 0: penalty + -l
             }
+            m_curr_var_info.m_width_score = 0.95;
         }
         else {
             nm().sub(u->value(), l->value(), width);
+            m_curr_var_info.m_width_score = 0.9;
         }
-        if (nm().le(width, m_small_value_thres))
+        if (nm().le(width, m_small_value_thres)) {
+            // m_curr_var_info.m_width_score = 0.9;
             m_curr_var_info.m_is_too_short = true;
+        }
+        m_curr_var_info.calc_score();
         if (m_best_var_info.m_id == null_var || m_curr_var_info < m_best_var_info) {
             m_best_var_info.copy(m_curr_var_info);
         }
     }
 }
-
 
 // return true for already unsat
 template<typename C>
