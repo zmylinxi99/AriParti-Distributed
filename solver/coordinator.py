@@ -212,7 +212,7 @@ class Coordinator:
     def receive_partitioner_messages(self):
         if self.partitioner.is_receive_done():
             return
-        if self.partitioner.is_running():
+        if not self.partitioner.is_process_done():
             self.partitioner.check_p_status()
         while True:
             self.receive_partitioner_messages_limited()
@@ -256,6 +256,10 @@ class Coordinator:
     
     def send_partitioner_message(self, msg: str):
         logging.debug(f'send_partitioner_message: {msg}')
+        if not self.partitioner.is_running():
+            logging.debug(f'failed')
+            return
+        logging.debug(f'succeed')
         self.partitioner.send_message(msg)
     
     def sync_ended_to_partitioner(self, node: ParallelNode, status: NodeStatus):

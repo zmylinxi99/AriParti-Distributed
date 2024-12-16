@@ -46,6 +46,9 @@ class Partitioner:
         self.result = PartitionerResult.unsolved
     
     def is_running(self):
+        if not self.status.is_running():
+            return False
+        self.check_p_status()
         return self.status.is_running()
     
     def is_process_done(self):
@@ -82,9 +85,6 @@ class Partitioner:
         return
     
     def send_message(self, msg: str):
-        if not self.status.is_running():
-            logging.debug(f'send_partitioner_message failed: {msg}')
-            return
         self.p.stdin.write(msg + '\n')
         self.p.stdin.flush()
     
