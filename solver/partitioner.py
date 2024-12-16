@@ -46,9 +46,6 @@ class Partitioner:
         self.result = PartitionerResult.unsolved
     
     def is_running(self):
-        if not self.status.is_running():
-            return False
-        self.check_p_status()
         return self.status.is_running()
     
     def is_process_done(self):
@@ -56,6 +53,12 @@ class Partitioner:
     
     def is_receive_done(self):
         return self.status.is_receive_done()
+    
+    def check_running(self):
+        if not self.is_running():
+            return False
+        self.check_p_status()
+        return self.is_running()
     
     def set_result(self, result: str):
         if result == 'sat':

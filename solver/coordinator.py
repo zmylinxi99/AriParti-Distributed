@@ -212,8 +212,7 @@ class Coordinator:
     def receive_partitioner_messages(self):
         if self.partitioner.is_receive_done():
             return
-        if not self.partitioner.is_process_done():
-            self.partitioner.check_p_status()
+        self.partitioner.check_running()
         while True:
             self.receive_partitioner_messages_limited()
             if not self.partitioner.is_process_done():
@@ -256,7 +255,7 @@ class Coordinator:
     
     def send_partitioner_message(self, msg: str):
         logging.debug(f'send_partitioner_message: {msg}')
-        if not self.partitioner.is_running():
+        if not self.partitioner.check_running():
             logging.debug(f'failed')
             return
         logging.debug(f'succeed')
@@ -410,7 +409,7 @@ class Coordinator:
         self.partitioner = Partitioner(p)
     
     def terminate_partitioner(self):
-        if self.partitioner.is_running():
+        if self.partitioner.check_running():
             self.partitioner.p.terminate()
     
     def start_solving(self):
@@ -470,9 +469,9 @@ class Coordinator:
             self.receive_message_from_leader()
             self.receive_partitioner_messages()
             if self.partitioner.is_receive_done():
-                if self.is_done():
-                    return True
                 break
+            if self.is_done():
+                return True
             if len(subnodes) == 0:
                 if self.tree.root != None:
                     assert(self.tree.root.status.is_unsolved())
