@@ -229,6 +229,7 @@ context_t<C>::context_t(reslimit& lim, C const & c, params_ref const & p, small_
     m_init(false),
     m_best_var_info(nm()),
     m_curr_var_info(nm()),
+    m_root_bicp_done(false),
     m_im(lim, interval_config(m_c.m())),
     m_num_buffer(nm())
 {
@@ -244,6 +245,10 @@ context_t<C>::context_t(reslimit& lim, C const & c, params_ref const & p, small_
     m_num_nodes     = 0;
     updt_params(p);
     reset_statistics();
+
+    m_ptr_wlist = &m_wlist;
+    m_ptr_units = &m_unit_clauses;
+    m_ptr_clauses = &m_clauses;
 }
 
 template<typename C>
@@ -651,6 +656,9 @@ var context_t<C>::mk_sum(unsigned sz, numeral const * as, var const * xs) {
     return new_var;
 }
 
+
+//#linxi TBD atom hash cache
+
 template<typename C>
 typename context_t<C>::atom * context_t<C>::mk_bool_atom(var x, bool neg) {
     void * mem = allocator().allocate(sizeof(atom));
@@ -745,6 +753,7 @@ void context_t<C>::add_clause_core(unsigned sz, atom * const * atoms, bool lemma
     c->m_watched = watch;
     if (!lemma) {
         m_clauses.push_back(c);
+        // (*m_ptr_clauses).push_back(c);
     }
     else if (watch) {
         m_lemmas.push_back(c);
@@ -776,6 +785,12 @@ template<typename C>
 void context_t<C>::add_unit_clause(atom * a, bool axiom) {
     TRACE("subpaving", a->display(tout, nm(), *m_display_proc); tout << "\n";);
     inc_ref(a);
+    // if (m_root_bicp_done) {
+    //     m_bicp_unit_clauses.push_back(TAG(atom*, a, axiom));
+    // }
+    // else {
+    //     m_unit_clauses.push_back(TAG(atom*, a, axiom));
+    // }
     m_unit_clauses.push_back(TAG(atom*, a, axiom));
 }
 
@@ -1276,7 +1291,6 @@ bool context_t<C>::relevant_new_bound(var x, numeral const & k, bool lower, bool
     }
 }
 
-
 template<typename C>
 bool context_t<C>::improve_bound(var x, numeral const & k, bool lower, bool open, node * n) {
     bound * curr_lower = n->lower(x);
@@ -1318,7 +1332,6 @@ bool context_t<C>::improve_bound(var x, numeral const & k, bool lower, bool open
     TRACE("subpaving_relevant_bound", tout << "new bound is relevant\n";);
     return true;
 }
-
 
 template<typename C>
 bool context_t<C>::is_zero(var x, node * n) const {
@@ -1991,14 +2004,14 @@ void context_t<C>::write_ss_line_to_coordinator() {
 template<typename C>
 void context_t<C>::write_debug_line_to_coordinator(const std::string & line) {
     if (!m_partitioner_debug)
-        return ;
+        return;
     std::cout << control_message::P2C::debug_info << " " << line << std::endl;
 }
 
 template<typename C>
 void context_t<C>::write_debug_ss_line_to_coordinator() {
     if (!m_partitioner_debug)
-        return ;
+        return;
     write_debug_line_to_coordinator(m_temp_stringstream.str());
     m_temp_stringstream.str("");
     m_temp_stringstream.clear();
@@ -2139,12 +2152,158 @@ lit context_t<C>::convert_atom_to_lit(atom * a) {
 }
 
 template<typename C>
+void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
+    struct lit_lt {
+        // bool lit, eq lit, ineq lit
+        bool operator()(const lit & lhs, const lit & rhs) const {
+            // bool, eq | ineq
+            if (lhs.m_bool != rhs.m_bool)
+                return lhs.m_bool;
+            if (lhs.m_bool) {
+                // bool | eq
+                if (lhs.m_open != rhs.m_open)
+                    return !lhs.m_open;
+            }
+            return lhs.m_x < rhs.m_x;
+        }
+    };
+    struct ineq_lit_cmp {
+        numeral_manager & m_nm;
+        ineq_lit_cmp(numeral_manager & _nm) : m_nm(_nm) {}
+        // 1 for tighter, 0 for equal, -1 for looser
+        int operator()(const lit & lhs, const lit & rhs) const {
+            assert(lhs.m_x == rhs.m_x);
+            assert(lhs.m_lower == rhs.m_lower);
+            if (lhs.m_lower) {
+                if (m_nm.gt(*lhs.m_val, *rhs.m_val)) {
+                    // lhs: >= 3, rhs: >= 2
+                    // >= 3 is tighter than >= 2
+                    return 1;
+                }
+                else if (m_nm.eq(*lhs.m_val, *rhs.m_val)) {
+                    if (lhs.m_open == rhs.m_open)
+                        return 0;
+                    // lhs: > 3, rhs: >= 3
+                    // > 3 is tighter than >= 3
+                    if (lhs.m_open)
+                        return 1;
+                    else
+                        return -1;
+                }
+                else {
+                    // lhs: > 2, rhs: >= 3
+                    // > 2 is not tighter than >= 3
+                    return -1;
+                }
+            }
+            else {
+                if (m_nm.lt(*lhs.m_val, *rhs.m_val)) {
+                    // lhs: <= 2, rhs: <= 3
+                    // <= 2 is tighter than <= 3
+                    return 1;
+                }
+                else if (m_nm.eq(*lhs.m_val, *rhs.m_val)) {
+                    if (lhs.m_open == rhs.m_open)
+                        return 0;
+                    // lhs: < 2, rhs: <= 2
+                    // < 2 is tighter than <= 2
+                    if (lhs.m_open)
+                        return 1;
+                    else
+                        return -1;
+                }
+                else {
+                    // lhs: < 3, rhs: <= 2
+                    // < 3 is not tighter than <= 2
+                    return -1;
+                }
+            }
+        }
+    };
+
+    var current_var = null_var;
+    lit current_lb, current_ub;
+    ineq_lit_cmp ilc(nm());
+
+    std::sort(input.begin(), input.end(), lit_lt());
+    for (unsigned i = 0, isz = input.size(); i < isz; ++i) {
+        if (input[i].is_bool_lit() || input[i].is_eq_lit()) {
+            output.push_back(input[i]);
+        }
+        else if (input[i].is_ineq_lit()) {
+            if (input[i].m_x != current_var) {
+                if (current_lb.m_x != null_var) {
+                    output.push_back(current_lb);
+                    current_lb.reset();
+                }
+                if (current_ub.m_x != null_var) {
+                    output.push_back(current_ub);
+                    current_ub.reset();
+                }
+                current_var = input[i].m_x;
+            }
+            
+            if (input[i].m_lower) {
+                if (current_lb.m_x == null_var) {
+                    current_lb = input[i];
+                }
+                else {
+                    int sgn = ilc(input[i], current_lb);
+                    if (is_conjunction) {
+                        if (sgn == 1) {
+                            current_lb = input[i];
+                        }
+                    }
+                    else {
+                        if (sgn == -1) {
+                            current_lb = input[i];
+                        }
+                    }
+                }
+            }
+            else {
+                if (current_ub.m_x == null_var) {
+                    current_ub = input[i];
+                }
+                else {
+                    int sgn = ilc(input[i], current_ub);
+                    if (is_conjunction) {
+                        if (sgn == 1) {
+                            current_lb = input[i];
+                        }
+                    }
+                    else {
+                        if (sgn == -1) {
+                            current_lb = input[i];
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            assert(false);
+        }
+    }
+    if (current_lb.m_x != null_var) {
+        output.push_back(current_lb);
+        current_lb.reset();
+    }
+    if (current_ub.m_x != null_var) {
+        output.push_back(current_ub);
+        current_ub.reset();
+    }
+}
+
+template<typename C>
 void context_t<C>::convert_node_to_task(node * n) {
     task_info & task = *m_ptask;
     // SASSERT(task.m_node_id == UINT32_MAX);
     task.m_node_id = n->id();
     task.m_depth = n->depth();
     vector<lit> temp_units;
+
+    // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
+    //     clause * cla = (*m_ptr_clauses)[i];
     for (unsigned i = 0, isz = m_clauses.size(); i < isz; ++i) {
         clause * cla = m_clauses[i];
         m_temp_atom_buffer.reset();
@@ -2176,15 +2335,20 @@ void context_t<C>::convert_node_to_task(node * n) {
             continue;
         if (m_temp_atom_buffer.size() == 1) {
             temp_units.push_back(std::move(convert_atom_to_lit(m_temp_atom_buffer[0])));
+            continue;
+        }
+        ++task.m_undef_clause_num;
+        task.m_undef_lit_num += m_temp_atom_buffer.size();
+        vector<lit> lit_cla, simp_lit_cla;
+        for (unsigned j = 0, jsz = m_temp_atom_buffer.size(); j < jsz; ++j) {
+            atom * a = m_temp_atom_buffer[j];
+            lit_cla.push_back(std::move(convert_atom_to_lit(a)));
+        }
+        simplify_ineqs_in_clause(lit_cla, simp_lit_cla, false);
+        if (simp_lit_cla.size() == 1) {
+            temp_units.push_back(std::move(simp_lit_cla[0]));
         }
         else {
-            ++task.m_undef_clause_num;
-            task.m_undef_lit_num += m_temp_atom_buffer.size();
-            vector<lit> lit_cla;
-            for (unsigned j = 0, jsz = m_temp_atom_buffer.size(); j < jsz; ++j) {
-                atom * a = m_temp_atom_buffer[j];
-                lit_cla.push_back(std::move(convert_atom_to_lit(a)));
-            }
             task.m_clauses.push_back(std::move(lit_cla));
         }
     }
@@ -2267,73 +2431,12 @@ void context_t<C>::convert_node_to_task(node * n) {
             }
         }
     }
-
-    struct lit_lt {
-        numeral_manager & m_nm;
-        lit_lt(numeral_manager & _nm) : m_nm(_nm) {}
-        bool operator()(const lit & lhs, const lit & rhs) const {
-            if (lhs.m_x != rhs.m_x) 
-                return lhs.m_x < rhs.m_x;
-            if (lhs.m_bool != rhs.m_bool)
-                return lhs.m_bool < rhs.m_bool;
-            if (lhs.m_bool) {
-                if (lhs.m_open != rhs.m_open)
-                    return lhs.m_open < rhs.m_open;
-                if (lhs.m_open) {
-                    if (lhs.m_lower != rhs.m_lower)
-                        return lhs.m_lower < rhs.m_lower;
-                    return m_nm.lt(*lhs.m_val, *rhs.m_val);
-                }
-                else {
-                    return lhs.m_lower < rhs.m_lower;
-                }
-            }
-            else {
-                if (lhs.m_open != rhs.m_open)
-                    return lhs.m_open < rhs.m_open;
-                if (lhs.m_lower != rhs.m_lower)
-                    return lhs.m_lower < rhs.m_lower;
-                return m_nm.lt(*lhs.m_val, *rhs.m_val);
-            }
-        }
-    };
-
-    struct lit_eq {
-        numeral_manager & m_nm;
-        lit_eq(numeral_manager & _nm) : m_nm(_nm) {}
-        bool operator()(const lit & lhs, const lit & rhs) const {
-            if (lhs.m_x != rhs.m_x) 
-                return false;
-            if (lhs.m_bool != rhs.m_bool)
-                return false;
-            if (lhs.m_bool) {
-                if (lhs.m_open != rhs.m_open)
-                    return false;
-                if (lhs.m_open) {
-                    if (lhs.m_lower != rhs.m_lower)
-                        return false;
-                    return m_nm.eq(*lhs.m_val, *rhs.m_val);
-                }
-                else {
-                    return lhs.m_lower == rhs.m_lower;
-                }
-            }
-            else {
-                if (lhs.m_open != rhs.m_open)
-                    return false;
-                if (lhs.m_lower != rhs.m_lower)
-                    return false;
-                return m_nm.eq(*lhs.m_val, *rhs.m_val);
-            }
-        }
-    };
-    lit_eq temp_lit_eq(nm());
-    std::sort(temp_units.begin(), temp_units.end(), lit_lt(nm()));
-    for (unsigned i = 0, sz = temp_units.size(); i < sz; ++i) {
-        if (i == 0 || !temp_lit_eq(temp_units[i], temp_units[i - 1])) {
-            task.m_var_bounds.push_back(temp_units[i]);
-        }
-    }
+    unsigned temp_units_sz = temp_units.size();
+    if (temp_units_sz == 0)
+        return;
+    
+    // TBD
+    simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
 }
 
 template<typename C>
@@ -2549,12 +2652,17 @@ bool context_t<C>::update_node_state_unsat(unsigned id) {
         // }
         --m_alive_task_num;
     }
-    if (sta != node_state::UNCONVERTED) {
-        node * n = m_nodes[id];
-        --m_unsolved_task_num;
-        for (unsigned i = 0, sz = n->depth(); i < sz; ++i) {
-            --m_var_unsolved_split_cnt[n->split_vars()[i]];
-        }
+    // if (sta != node_state::UNCONVERTED) {
+    //     node * n = m_nodes[id];
+    //     --m_unsolved_task_num;
+    //     for (unsigned i = 0, sz = n->depth(); i < sz; ++i) {
+    //         --m_var_unsolved_split_cnt[n->split_vars()[i]];
+    //     }
+    // }
+    node * n = m_nodes[id];
+    --m_unsolved_task_num;
+    for (unsigned i = 0, sz = n->depth(); i < sz; ++i) {
+        --m_var_unsolved_split_cnt[n->split_vars()[i]];
     }
     sta = node_state::UNSAT;
     return false;
@@ -2564,7 +2672,7 @@ template<typename C>
 void context_t<C>::unsat_push_down(node * n) {
     //#linxi TBD
     if (update_node_state_unsat(n->id()))
-        return ;
+        return;
     node * ch = n->first_child();
     while (ch != nullptr) {
         unsat_push_down(ch);
@@ -2589,9 +2697,9 @@ template<typename C>
 void context_t<C>::unsat_push_up(node * n) {
     // SASSERT(m_nodes_state[id] != node_state::UNSAT);
     if (m_nodes_state[n->id()] == node_state::UNSAT)
-        return ;
+        return;
     if (!can_propagate_unsat(n))
-        return ;
+        return;
     update_node_state_unsat(n->id());
     node * parent = n->parent();
     if (parent != nullptr)
@@ -2601,7 +2709,7 @@ void context_t<C>::unsat_push_up(node * n) {
 template<typename C>
 void context_t<C>::node_solved_unsat(node * n) {\
     if (update_node_state_unsat(n->id()))
-        return ;
+        return;
     node * parent = n->parent();
     if (parent != nullptr)
         unsat_push_up(parent);
@@ -2639,13 +2747,6 @@ void context_t<C>::parse_line(const std::string & line) {
         UNREACHABLE();
     }
 }
-
-// template<typename C>
-// bool context_t<C>::read_parse_line() {
-//     if (!read_line_from_coordinator())
-//         return false;
-//     return true;
-// }
 
 template<typename C>
 void context_t<C>::communicate_with_coordinator() {
@@ -2783,6 +2884,9 @@ void context_t<C>::split_node(node * n) {
     else {
         m_leaf_heap.emplace(left->id(), m_ptask->m_depth, 
             m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
+        ++m_unsolved_task_num;
+        for (unsigned i = 0, sz = left->depth(); i < sz; ++i)
+            ++m_var_unsolved_split_cnt[left->split_vars()[i]];
     }
 
     m_queue.push_back(rb);
@@ -2798,6 +2902,39 @@ void context_t<C>::split_node(node * n) {
     else {
         m_leaf_heap.emplace(right->id(), m_ptask->m_depth, 
             m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
+        ++m_unsolved_task_num;
+        for (unsigned i = 0, sz = right->depth(); i < sz; ++i)
+            ++m_var_unsolved_split_cnt[right->split_vars()[i]];
+    }
+}
+
+//#linxi TBD
+template<typename C>
+void context_t<C>::rebuild_clauses_after_bicp() {
+    for (unsigned i = 0, isz = m_wlist.size(); i < isz; ++i) {
+        m_bicp_wlist.push_back(watch_list());
+        typename watch_list::const_iterator it  = m_wlist[i].begin();
+        typename watch_list::const_iterator end = m_wlist[i].end();
+        //#linxi TBD remove unused variables in wlist
+        for (; it != end; ++it) {
+            watched const & w = *it;
+            if (w.is_clause()) {
+                // do nothing
+            }
+            else {
+                var y = w.get_var();
+                m_bicp_wlist[i].push_back(watched(y));
+            }
+        }
+    }
+    vector<vector<lit>> & clauses = m_ptask->m_clauses;
+    for (unsigned i = 0, isz = clauses.size(); i < isz; ++i) {
+        vector<subpaving::lit> &cla = clauses[i];
+        unsigned jsz = cla.size();
+        for (unsigned j = 0; j < jsz; ++j) {
+            subpaving::lit &l = cla[j];
+
+        }
     }
 }
 
@@ -2824,6 +2961,13 @@ bool context_t<C>::create_new_task() {
         TRACE("subpaving_main", tout << "node #" << n->id() << " after propagation\n";
                 display_bounds(tout, n););
         convert_node_to_task(n);
+        // if (n->depth() == 0) {
+        //     m_root_bicp_done = true;
+        //     m_ptr_wlist = &m_bicp_wlist;
+        //     m_ptr_units = &m_bicp_unit_clauses;
+        //     m_ptr_clauses = &m_bicp_clauses;
+        //     rebuild_clauses_after_bicp();
+        // }
         {
             m_temp_stringstream << "alive tasks: "<< m_alive_task_num
                 << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
@@ -2853,6 +2997,9 @@ lbool context_t<C>::operator()() {
             return l_false;
         }
         m_leaf_heap.emplace(0, 0, 0, 0);
+        ++m_unsolved_task_num;
+        // for (unsigned i = 0, sz = m_root->depth(); i < sz; ++i)
+        //     ++m_var_unsolved_split_cnt[m_root->split_vars()[i]];
     }
     unsigned nid = m_ptask->m_node_id;
     if (nid != UINT32_MAX) {
@@ -2866,9 +3013,9 @@ lbool context_t<C>::operator()() {
                             << " " << nid << " " << pid;
         write_ss_line_to_coordinator();
         m_nodes_state[nid] = node_state::WAITING;
-        ++m_unsolved_task_num;
-        for (unsigned i = 0, sz = n->depth(); i < sz; ++i)
-            ++m_var_unsolved_split_cnt[n->split_vars()[i]];
+        // ++m_unsolved_task_num;
+        // for (unsigned i = 0, sz = n->depth(); i < sz; ++i)
+        //     ++m_var_unsolved_split_cnt[n->split_vars()[i]];
         split_node(m_nodes[nid]);
         m_ptask->reset();
     }

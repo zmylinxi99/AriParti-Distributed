@@ -339,14 +339,14 @@ class subpaving_tactic : public tactic {
             unsigned sz = bd.size();
             if (sz == 1) {
                 m_expr_buffer.push_back(convert_lit_to_expr(bd[0]));
-                return ;
+                return;
             }
             subpaving::lit & bl = bd[0], & bu = bd[1];
             // bl.m_x == bu.m_x
             if (!m_qm.eq(*bl.m_val, *bu.m_val)) {
                 m_expr_buffer.push_back(convert_lit_to_expr(bl));
                 m_expr_buffer.push_back(convert_lit_to_expr(bu));
-                return ;
+                return;
             }
             expr_ref er(m_manager);
             expr * e = m_v2e[bl.m_x].get();
@@ -417,7 +417,7 @@ class subpaving_tactic : public tactic {
             convert_task_to_exprs();
             unsigned sz = m_task_expr_clauses.size();
             if (sz == 0)
-                return ;
+                return;
             std::string task_name;
             {
                 std::stringstream ss;

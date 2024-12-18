@@ -20,15 +20,24 @@ Revision History:
 
 namespace subpaving {
 
+typedef unsigned var;
+
+const var null_var = UINT_MAX;
+
 class atom;
 
 struct lit {
-    unsigned    m_x:28;
+    var    m_x;
     unsigned    m_lower:1;
     unsigned    m_open:1;
     unsigned    m_bool:1;    
     unsigned    m_int:1;    
     mpq *       m_val;
+    void reset() { m_x = null_var; }
+    lit() { reset(); }
+    bool is_ineq_lit() const { return !m_bool; }
+    bool is_eq_lit() const { return m_bool && m_open; }
+    bool is_bool_lit() const { return m_bool && !m_open; }
 };
 
 struct task_info {
@@ -64,9 +73,6 @@ struct control_message {
     };
 };
 
-typedef unsigned var;
-
-const var null_var = UINT_MAX;
 
 class exception {
 };

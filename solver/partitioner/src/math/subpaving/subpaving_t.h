@@ -34,6 +34,7 @@ Revision History:
 #include <queue>
 #include <random>
 #include <cmath>
+#include <assert.h>
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4200)
@@ -68,6 +69,9 @@ public:
         bool is_bool() const { return m_bool; }
         bool is_lower() const { return m_lower; }
         bool is_open() const { return m_open; }
+        bool is_ineq_atom() const { return !m_bool; }
+        bool is_eq_atom() const { return m_bool && m_open; }
+        bool is_bool_atom() const { return m_bool && !m_open; }
         void display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc = display_var_proc());
         struct lt_var_proc { 
             bool operator()(atom const * a, atom const * b) const {
@@ -242,6 +246,7 @@ public:
         node *                m_next;
         unsigned_vector       m_key_rank;
         unsigned_vector       m_split_vars;
+        // atoms by unit propagation
         ptr_vector<atom>      m_up_atoms;
     public:
         node(context_t & s, unsigned id, bool_vector &is_bool);
@@ -534,7 +539,9 @@ public:
         bool operator < (const var_info & rhs) const {
             if (m_is_too_short != rhs.m_is_too_short)
                 return rhs.m_is_too_short;
-            return m_score > rhs.m_score;
+            if (m_score != rhs.m_score)
+                return m_score > rhs.m_score;
+            return m_id < rhs.m_id;
         }
 
         void copy(const var_info & rhs) {
@@ -610,6 +617,15 @@ private:
     ptr_vector<atom>          m_unit_clauses;
     ptr_vector<clause>        m_clauses;
     ptr_vector<clause>        m_lemmas;
+    //#linxi clauses after root node BICP
+    bool                      m_root_bicp_done;
+    vector<watch_list>        m_bicp_wlist;
+    ptr_vector<atom>          m_bicp_unit_clauses;
+    ptr_vector<clause>        m_bicp_clauses;
+
+    vector<watch_list>      * m_ptr_wlist;
+    ptr_vector<atom>        * m_ptr_units;
+    ptr_vector<clause>      * m_ptr_clauses;
 
     uint64_t                  m_timestamp;
     node *                    m_root;
@@ -945,6 +961,8 @@ private:
     void init_partition();
     
     lit convert_atom_to_lit(atom * a);
+    
+    void simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction);
 
     void convert_node_to_task(node * n);
     
@@ -987,6 +1005,8 @@ private:
 
     node * select_next_node();
     
+    void rebuild_clauses_after_bicp();
+
     bool create_new_task();
 
     // -----------------------------------
