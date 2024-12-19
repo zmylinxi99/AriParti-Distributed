@@ -47,6 +47,8 @@ class ControlMessage:
         notify_result = auto()
         # pre-partiitoning done
         pre_partition_done = auto()
+        # # pre-processing done
+        # pre_process_done = auto()
         
         notify_error = auto()
         
@@ -61,6 +63,9 @@ class ControlMessage:
         
         def is_pre_partition_done(self):
             return self == ControlMessage.C2L.pre_partition_done
+        
+        # def is_pre_process_done(self):
+        #     return self == ControlMessage.C2L.pre_process_done
     
         def is_notify_error(self):
             return self == ControlMessage.C2L.notify_error

@@ -354,15 +354,28 @@ class ParallelTree(PartitionTree):
                            self.get_current_time())
         self.solvings.append(node)
         
-    def log_display_dfs(self, node: ParallelNode, depth: int):
-        logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
-        for child in node.children:
-            self.log_display_dfs(child, depth + 1)
+    # def log_display_dfs(self, node: ParallelNode, depth: int):
+    #     logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
+    #     for child in node.children:
+    #         self.log_display_dfs(child, depth + 1)
+    
+    # def log_display(self):
+    #     logging.debug(f'display parallel tree')
+    #     if self.root != None:
+    #         self.log_display_dfs(self.root, 0)
     
     def log_display(self):
         logging.debug(f'display parallel tree')
-        if self.root != None:
-            self.log_display_dfs(self.root, 0)
+        stack = deque()
+        if self.root is not None:
+            stack.append((self.root, 0))
+        while len(stack) > 0:
+            # bfs, dfs
+            # node, depth = stack.popleft()
+            node, depth = stack.pop()
+            logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
+            for child in node.children:
+                stack.append((child, depth + 1))
 
 class DistributedNode(PartitionNode):
     def __init__(self, id, parent, make_time):
@@ -433,9 +446,9 @@ class DistributedTree(PartitionTree):
                                     NodeReason.original)
         self.result = result
     
-    def assign_root_node(self):
+    def assign_root_node(self, coord_isolated):
         self.root = self.make_node(None)
-        self.root.assign_to = 0
+        self.root.assign_to = coord_isolated
 
     # split node from {parent} to {coord_id}
     def split_node(self, parent: DistributedNode, coord_id: int):
@@ -455,7 +468,9 @@ class DistributedTree(PartitionTree):
         if self.root is not None:
             stack.append((self.root, 0))
         while len(stack) > 0:
-            node, depth = stack.popleft()
+            # bfs, dfs
+            # node, depth = stack.popleft()
+            node, depth = stack.pop()
             logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
             for child in node.children:
                 stack.append((child, depth + 1))
