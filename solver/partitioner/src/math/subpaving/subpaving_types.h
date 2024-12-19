@@ -26,15 +26,23 @@ const var null_var = UINT_MAX;
 
 class atom;
 
+enum lit_type {
+    bool_lit = 0,
+    eq_lit = 1,
+    ineq_lit = 2
+};
+
 struct lit {
     var    m_x;
     unsigned    m_lower:1;
     unsigned    m_open:1;
-    unsigned    m_bool:1;    
+    unsigned    m_bool:1;
     unsigned    m_int:1;    
     mpq *       m_val;
+    // atom *       m_a;
     void reset() { m_x = null_var; }
     lit() { reset(); }
+    lit_type get_type() const { return m_bool ? (m_open ? eq_lit : bool_lit) : ineq_lit; }
     bool is_ineq_lit() const { return !m_bool; }
     bool is_eq_lit() const { return m_bool && m_open; }
     bool is_bool_lit() const { return m_bool && !m_open; }
@@ -45,8 +53,8 @@ struct task_info {
     unsigned m_depth;
     unsigned m_undef_lit_num;
     unsigned m_undef_clause_num;
-    vector<vector<lit>>  m_clauses;
-    vector<lit>  m_var_bounds;
+    vector<vector<lit>> m_clauses;
+    vector<lit> m_var_bounds;
     
     void reset() {
         m_node_id = UINT32_MAX;
@@ -54,6 +62,17 @@ struct task_info {
         m_var_bounds.reset();
         m_undef_lit_num = 0;
         m_undef_clause_num = 0;
+    }
+
+    void copy(task_info const & src) {
+        m_node_id = src.m_node_id;
+        m_depth = src.m_depth;
+        m_undef_lit_num = src.m_undef_lit_num;
+        m_undef_clause_num = src.m_undef_clause_num;
+        m_clauses.reset();
+        m_clauses.append(src.m_clauses);
+        m_var_bounds.reset();
+        m_var_bounds.append(src.m_var_bounds);
     }
 };
 

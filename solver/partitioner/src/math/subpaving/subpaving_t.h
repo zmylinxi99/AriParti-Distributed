@@ -583,6 +583,98 @@ public:
         }
     };
 
+    struct lit_lt {
+        numeral_manager & m_nm;
+        lit_lt(numeral_manager & _nm) : m_nm(_nm) {}
+        // bool lit, eq lit, ineq lit
+        bool operator()(const lit & lhs, const lit & rhs) const {
+            // bool, eq | ineq
+            if (lhs.m_bool != rhs.m_bool)
+                return lhs.m_bool;
+            if (lhs.m_bool) {
+                // bool | eq
+                if (lhs.m_open != rhs.m_open)
+                    return !lhs.m_open;
+                if (lhs.m_open) {
+                    // eq
+                    if (lhs.m_x != rhs.m_x)
+                        return lhs.m_x < rhs.m_x;
+                    if (lhs.m_lower != rhs.m_lower)
+                        return lhs.m_lower < rhs.m_lower;
+                    return m_nm.lt(*lhs.m_val, *rhs.m_val);
+                }
+                else {
+                    // bool
+                    if (lhs.m_x != rhs.m_x)
+                        return lhs.m_x < rhs.m_x;
+                    return lhs.m_lower;
+                }
+            }
+            else {
+                // return lhs.m_x < rhs.m_x;
+                if (lhs.m_x != rhs.m_x)
+                    return lhs.m_x < rhs.m_x;
+                if (lhs.m_lower != rhs.m_lower)
+                    return lhs.m_lower < rhs.m_lower;
+                return m_nm.lt(*lhs.m_val, *rhs.m_val);
+            }
+        }
+    };
+
+    struct ineq_lit_cmp {
+        numeral_manager & m_nm;
+        ineq_lit_cmp(numeral_manager & _nm) : m_nm(_nm) {}
+        // 1 for tighter, 0 for equal, -1 for looser
+        int operator()(const lit & lhs, const lit & rhs) const {
+            assert(lhs.m_x == rhs.m_x);
+            assert(lhs.m_lower == rhs.m_lower);
+            if (lhs.m_lower) {
+                if (m_nm.gt(*lhs.m_val, *rhs.m_val)) {
+                    // lhs: >= 3, rhs: >= 2
+                    // >= 3 is tighter than >= 2
+                    return 1;
+                }
+                else if (m_nm.eq(*lhs.m_val, *rhs.m_val)) {
+                    if (lhs.m_open == rhs.m_open)
+                        return 0;
+                    // lhs: > 3, rhs: >= 3
+                    // > 3 is tighter than >= 3
+                    if (lhs.m_open)
+                        return 1;
+                    else
+                        return -1;
+                }
+                else {
+                    // lhs: > 2, rhs: >= 3
+                    // > 2 is not tighter than >= 3
+                    return -1;
+                }
+            }
+            else {
+                if (m_nm.lt(*lhs.m_val, *rhs.m_val)) {
+                    // lhs: <= 2, rhs: <= 3
+                    // <= 2 is tighter than <= 3
+                    return 1;
+                }
+                else if (m_nm.eq(*lhs.m_val, *rhs.m_val)) {
+                    if (lhs.m_open == rhs.m_open)
+                        return 0;
+                    // lhs: < 2, rhs: <= 2
+                    // < 2 is tighter than <= 2
+                    if (lhs.m_open)
+                        return 1;
+                    else
+                        return -1;
+                }
+                else {
+                    // lhs: < 3, rhs: <= 2
+                    // < 3 is not tighter than <= 2
+                    return -1;
+                }
+            }
+        }
+    };
+
     /**
        \brief Return most recent splitting var for node n.
     */
@@ -623,9 +715,9 @@ private:
     ptr_vector<atom>          m_bicp_unit_clauses;
     ptr_vector<clause>        m_bicp_clauses;
 
-    vector<watch_list>      * m_ptr_wlist;
-    ptr_vector<atom>        * m_ptr_units;
-    ptr_vector<clause>      * m_ptr_clauses;
+    // vector<watch_list>      * m_ptr_wlist;
+    // ptr_vector<atom>        * m_ptr_units;
+    // ptr_vector<clause>      * m_ptr_clauses;
 
     uint64_t                  m_timestamp;
     node *                    m_root;
@@ -717,9 +809,14 @@ private:
     
     node *                  m_last_node;
     task_info *             m_ptask;
+    task_info               m_bicp_task;
     // unsigned                m_task_num;
     ptr_buffer<atom>        m_temp_atom_buffer;
+    unsigned                m_conj_simplified_cnt;
+    unsigned                m_disj_simplified_cnt;
+    // unsigned                m_rm_dom_cnt;
     // random_gen              m_rand;
+
 
     // Counters
     unsigned                  m_num_nodes;
@@ -916,6 +1013,8 @@ private:
     */
     lbool value(atom * t, node * n);
 
+    lbool value(lit & l, node * n);
+
     /**
        \brief Propagate new bounds at node n using the definition of variable x.
        \pre is_definition(x)
@@ -962,9 +1061,15 @@ private:
     
     lit convert_atom_to_lit(atom * a);
     
+    bool test_dominated(vector<lit> & longer_cla, vector<lit> & shorter_cla);
+
+    void remove_dominated_clauses(vector<vector<lit>> & input, vector<vector<lit>> & output);
+    
     void simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction);
 
     void convert_node_to_task(node * n);
+
+    void convert_root_to_task();
     
     /**
        \brief Collect variable informatiion in current node by dp.
@@ -1007,6 +1112,8 @@ private:
     
     void rebuild_clauses_after_bicp();
 
+    void store_root_task_after_bicp();
+    
     bool create_new_task();
 
     // -----------------------------------

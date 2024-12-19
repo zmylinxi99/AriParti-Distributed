@@ -246,9 +246,9 @@ context_t<C>::context_t(reslimit& lim, C const & c, params_ref const & p, small_
     updt_params(p);
     reset_statistics();
 
-    m_ptr_wlist = &m_wlist;
-    m_ptr_units = &m_unit_clauses;
-    m_ptr_clauses = &m_clauses;
+    // m_ptr_wlist = &m_wlist;
+    // m_ptr_units = &m_unit_clauses;
+    // m_ptr_clauses = &m_clauses;
 }
 
 template<typename C>
@@ -1445,6 +1445,89 @@ lbool context_t<C>::value(atom * t, node * n) {
     }
 }
 
+/**
+   \brief Return the truth value of the test lit tl in node n.
+
+   The result may be l_true (True), l_false (False), or l_undef(Unknown).
+*/
+template<typename C>
+lbool context_t<C>::value(lit & tl, node * n) {
+    var x = tl.m_x;
+    bvalue_kind bk = n->bvalue(x);
+    if (tl.m_bool) {
+        if (tl.m_open) {
+            // equation
+            if (is_int(x) && !nm().is_int(*tl.m_val)) {
+                if (tl.m_lower)
+                    return l_true;
+                return l_false;
+            }
+            bound * u = n->upper(x);
+            bound * l = n->lower(x);
+            if (u == nullptr && l == nullptr)
+                return l_undef;
+            if (u != nullptr && nm().eq(u->value(), *tl.m_val) 
+                && l != nullptr && nm().eq(l->value(), *tl.m_val)) {
+                if (tl.m_lower)
+                    return l_false;
+                else
+                    return l_true;
+            }
+            if (tl.m_lower) {
+                if (u != nullptr && (nm().lt(u->value(), *tl.m_val)
+                    || (u->is_open() && nm().eq(u->value(), *tl.m_val))))
+                    return l_true;
+                if (l != nullptr && (nm().gt(l->value(), *tl.m_val)
+                    || (l->is_open() && nm().eq(l->value(), *tl.m_val))))
+                    return l_true;
+                return l_undef;
+            }
+            else {
+                if (u != nullptr && (nm().lt(u->value(), *tl.m_val)
+                    || (u->is_open() && nm().eq(u->value(), *tl.m_val))))
+                    return l_false;
+                if (l != nullptr && (nm().gt(l->value(), *tl.m_val)
+                    || (l->is_open() && nm().eq(l->value(), *tl.m_val))))
+                    return l_false;
+                return l_undef;
+            }
+        }
+        else {
+            SASSERT(bk != bvalue_kind::b_arith);
+            if (bk == bvalue_kind::b_undef)
+                return l_undef;
+            // lower means neg
+            bvalue_kind nbk = tl.m_lower ? b_false : b_true;
+            if (bk != nbk)
+                return l_false;
+            return l_true;
+        }
+    }
+    else {
+        SASSERT(bk == bvalue_kind::b_arith);
+        bound * u = n->upper(x);
+        bound * l = n->lower(x);
+        if (u == nullptr && l == nullptr)
+            return l_undef;
+        else if (tl.m_lower) {
+            if (u != nullptr && (nm().lt(u->value(), *tl.m_val) || ((u->is_open() || tl.m_open) && nm().eq(u->value(), *tl.m_val))))
+                return l_false;
+            else if (l != nullptr && (nm().gt(l->value(), *tl.m_val) || ((l->is_open() || !tl.m_open) && nm().eq(l->value(), *tl.m_val))))
+                return l_true;
+            else
+                return l_undef;
+        }
+        else {
+            if (l != nullptr && (nm().gt(l->value(), *tl.m_val) || ((l->is_open() || tl.m_open) && nm().eq(l->value(), *tl.m_val))))
+                return l_false;
+            else if (u != nullptr && (nm().lt(u->value(), *tl.m_val) || ((u->is_open() || !tl.m_open) && nm().eq(u->value(), *tl.m_val))))
+                return l_true;
+            else
+                return l_undef;
+        }
+    }
+}
+
 template<typename C>
 void context_t<C>::propagate_clause(clause * c, node * n) {
     TRACE("propagate_clause", tout << "propagate using:\n"; display(tout, c); tout << "\n";);
@@ -2099,6 +2182,9 @@ void context_t<C>::init_partition() {
     init_communication();
 
     {
+        m_temp_stringstream << "clause number: " << m_clauses.size();
+        write_debug_ss_line_to_coordinator();
+        
         m_temp_stringstream << "random seed: " << m_rand_seed;
         write_debug_ss_line_to_coordinator();
     }
@@ -2129,6 +2215,7 @@ template<typename C>
 lit context_t<C>::convert_atom_to_lit(atom * a) {
     lit l;
     l.m_x = a->m_x;
+    // l.m_a = a;
     if (a->m_bool) {
         l.m_bool = true;
         l.m_lower = a->m_lower;
@@ -2152,80 +2239,110 @@ lit context_t<C>::convert_atom_to_lit(atom * a) {
 }
 
 template<typename C>
-void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
-    struct lit_lt {
-        // bool lit, eq lit, ineq lit
-        bool operator()(const lit & lhs, const lit & rhs) const {
-            // bool, eq | ineq
-            if (lhs.m_bool != rhs.m_bool)
-                return lhs.m_bool;
-            if (lhs.m_bool) {
-                // bool | eq
-                if (lhs.m_open != rhs.m_open)
-                    return !lhs.m_open;
+bool context_t<C>::test_dominated(vector<lit> & longer_cla, vector<lit> & shorter_cla) {
+    unsigned l_sz = longer_cla.size(), s_sz = shorter_cla.size();
+    assert(l_sz >= s_sz);
+    unsigned l_p = 0;
+    ineq_lit_cmp ilt(nm());
+    for (unsigned s_p = 0; s_p < s_sz; ++s_p) {
+        lit & s_lit = shorter_cla[s_p];
+        bool matched = false;
+        while (l_p < l_sz) {
+            lit & l_lit = longer_cla[l_p];
+            ++l_p;
+            lit_type llt = l_lit.get_type();
+            lit_type slt = s_lit.get_type();
+            if (llt < slt)
+                continue;
+            if (llt > slt)
+                return false;
+            if (l_lit.m_x < s_lit.m_x)
+                continue;
+            if (l_lit.m_x > s_lit.m_x)
+                return false;
+            if (llt == lit_type::bool_lit) {
+                if (l_lit.m_lower != s_lit.m_lower)
+                    continue;
+                matched = true;
+                break;
             }
-            return lhs.m_x < rhs.m_x;
-        }
-    };
-    struct ineq_lit_cmp {
-        numeral_manager & m_nm;
-        ineq_lit_cmp(numeral_manager & _nm) : m_nm(_nm) {}
-        // 1 for tighter, 0 for equal, -1 for looser
-        int operator()(const lit & lhs, const lit & rhs) const {
-            assert(lhs.m_x == rhs.m_x);
-            assert(lhs.m_lower == rhs.m_lower);
-            if (lhs.m_lower) {
-                if (m_nm.gt(*lhs.m_val, *rhs.m_val)) {
-                    // lhs: >= 3, rhs: >= 2
-                    // >= 3 is tighter than >= 2
-                    return 1;
-                }
-                else if (m_nm.eq(*lhs.m_val, *rhs.m_val)) {
-                    if (lhs.m_open == rhs.m_open)
-                        return 0;
-                    // lhs: > 3, rhs: >= 3
-                    // > 3 is tighter than >= 3
-                    if (lhs.m_open)
-                        return 1;
-                    else
-                        return -1;
-                }
-                else {
-                    // lhs: > 2, rhs: >= 3
-                    // > 2 is not tighter than >= 3
-                    return -1;
-                }
+            else if (llt == lit_type::eq_lit) {
+                if (l_lit.m_lower != s_lit.m_lower)
+                    continue;
+                if (!nm().eq(*l_lit.m_val, *s_lit.m_val))
+                    continue;
+                matched = true;
+                break;
             }
             else {
-                if (m_nm.lt(*lhs.m_val, *rhs.m_val)) {
-                    // lhs: <= 2, rhs: <= 3
-                    // <= 2 is tighter than <= 3
-                    return 1;
-                }
-                else if (m_nm.eq(*lhs.m_val, *rhs.m_val)) {
-                    if (lhs.m_open == rhs.m_open)
-                        return 0;
-                    // lhs: < 2, rhs: <= 2
-                    // < 2 is tighter than <= 2
-                    if (lhs.m_open)
-                        return 1;
-                    else
-                        return -1;
-                }
-                else {
-                    // lhs: < 3, rhs: <= 2
-                    // < 3 is not tighter than <= 2
-                    return -1;
-                }
+                if (l_lit.m_lower != s_lit.m_lower)
+                    continue;
+                // longer  clause: b1 or -b2 or x1 > 1 or x2 < 3
+                // shorter clause: b1        or x1 > 1 or x2 < 3 (l_lit equal:  dominated)
+                // shorter clause: b1        or x1 > 2 or x2 < 0 (l_lit looser: dominated)
+                // l_lit need not tighter than s_lit
+                int sgn = ilt(l_lit, s_lit);
+                if (sgn == 1)
+                    continue;
+                matched = true;
+                break;
             }
         }
-    };
+        if (!matched)
+            return false;
+    }
+    return true;
+}
 
+template<typename C>
+void context_t<C>::remove_dominated_clauses(vector<vector<lit>> & input, vector<vector<lit>> & output) {
+    const unsigned max_sz_thres = 10000;
+    unsigned input_sz = input.size();
+    if (input_sz == 0 || input_sz > max_sz_thres)
+        return;
+    struct clause_info {
+        unsigned id;
+        unsigned sz;
+        bool operator<(const clause_info & rhs) const {
+            if (sz != rhs.sz)
+                return sz < rhs.sz;
+            return id < rhs.id;
+        }
+    };
+    vector<clause_info> clause_ids;
+    for (unsigned i = 0; i < input_sz; ++i) {
+        clause_ids.push_back({i, input[i].size()});
+    }
+    std::sort(clause_ids.begin(), clause_ids.end());
+    for (unsigned i = 0; i < input_sz; ++i) {
+        vector<lit> & longer_cla = input[clause_ids[i].id];
+        bool is_dominated = false;
+        for (vector<lit> & shorter_cla : output) {
+            if (test_dominated(longer_cla, shorter_cla)) {
+                is_dominated = true;
+                break;
+            }
+        }
+        if (!is_dominated)
+            output.push_back(std::move(longer_cla));
+    }
+    unsigned removed_cnt = input.size() - output.size();
+    if (removed_cnt > 0) {
+        m_temp_stringstream
+            << "remove_dominated_clauses before: " << input.size()
+            << ", after: " << output.size()
+            << ", removed: " << removed_cnt;
+        write_debug_ss_line_to_coordinator();
+    }
+}
+
+template<typename C>
+void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
     var current_var = null_var;
     lit current_lb, current_ub;
     ineq_lit_cmp ilc(nm());
-
-    std::sort(input.begin(), input.end(), lit_lt());
+    
+    std::sort(input.begin(), input.end(), lit_lt(nm()));
     for (unsigned i = 0, isz = input.size(); i < isz; ++i) {
         if (input[i].is_bool_lit() || input[i].is_eq_lit()) {
             output.push_back(input[i]);
@@ -2269,12 +2386,12 @@ void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
                     int sgn = ilc(input[i], current_ub);
                     if (is_conjunction) {
                         if (sgn == 1) {
-                            current_lb = input[i];
+                            current_ub = input[i];
                         }
                     }
                     else {
                         if (sgn == -1) {
-                            current_lb = input[i];
+                            current_ub = input[i];
                         }
                     }
                 }
@@ -2292,6 +2409,12 @@ void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
         output.push_back(current_ub);
         current_ub.reset();
     }
+
+    unsigned reduced = input.size() - output.size();
+    if (is_conjunction)
+        m_conj_simplified_cnt += reduced;
+    else
+        m_disj_simplified_cnt += reduced;
 }
 
 template<typename C>
@@ -2301,7 +2424,124 @@ void context_t<C>::convert_node_to_task(node * n) {
     task.m_node_id = n->id();
     task.m_depth = n->depth();
     vector<lit> temp_units;
+    vector<lit> temp_lit_buffer;
+    vector<vector<lit>> temp_clauses;
+    // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
+    //     clause * cla = (*m_ptr_clauses)[i];
+    vector<vector<lit>> & clauses = m_bicp_task.m_clauses;
+    for (unsigned i = 0, isz = clauses.size(); i < isz; ++i) {
+        vector<lit> & cla = clauses[i];
+        temp_lit_buffer.reset();
+        bool skippable = false;
+        for (unsigned j = 0, jsz = cla.size(); j < jsz; ++j) {
+            lit & l = cla[j];
+            lbool res = value(l, n);
+            if (res == l_true) {
+                skippable = true;
+                break;
+            }
+            else if (res == l_false) {
+                continue;
+            }
+            else {
+                temp_lit_buffer.push_back(l);
+            }
+        }
+        if (skippable)
+            continue;
+        if (temp_lit_buffer.size() == 1) {
+            temp_units.push_back(std::move(temp_lit_buffer[0]));
+            continue;
+        }
+        ++task.m_undef_clause_num;
+        task.m_undef_lit_num += temp_lit_buffer.size();
+        task.m_clauses.push_back(std::move(temp_lit_buffer));
+    }
+    vector<lit> & var_bounds = m_bicp_task.m_var_bounds;
+    temp_units.append(var_bounds);
+    for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
+        atom * at = n->up_atoms()[i];
+        if (m_defs[at->m_x] == nullptr)
+            continue;
+        temp_units.push_back(std::move(convert_atom_to_lit(at)));
+    }
 
+    for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
+        if (m_defs[x] != nullptr)
+            continue;
+        if (m_is_bool[x] && n->bvalue(x) == bvalue_kind::b_undef)
+            continue;
+        if (!m_is_bool[x] && n->lower(x) == nullptr && n->upper(x) == nullptr)
+            continue;
+        if (m_is_bool[x]) {
+            temp_units.push_back(lit());
+            lit & l = temp_units.back();
+            l.m_x = x;
+            l.m_bool = true;
+            l.m_open = false;
+            if (n->bvalue(x) == b_false)
+                l.m_lower = true;
+            else if (n->bvalue(x) == b_true)
+                l.m_lower = false;
+            else
+                UNREACHABLE();
+        }
+        else {
+            bound * low = n->lower(x);
+            bound * upp = n->upper(x);
+            if (low != nullptr && upp != nullptr && nm().eq(low->value(), upp->value())) {
+                temp_units.push_back(lit());
+                lit & l = temp_units.back();
+                l.m_x = x;
+                l.m_bool = true;
+                l.m_open = true;
+
+                l.m_int = m_is_int[x];
+                l.m_lower = false;
+                l.m_val = &low->m_val;
+            }
+            else {
+                if (low != nullptr) {
+                    temp_units.push_back(lit());
+                    lit & l = temp_units.back();
+                    l.m_x = x;
+                    l.m_bool = false;
+
+                    l.m_int = m_is_int[x];
+                    l.m_open = low->m_open;
+                    l.m_lower = true;
+                    l.m_val = &low->m_val;
+                }
+                if (upp != nullptr) {
+                    temp_units.push_back(lit());
+                    lit & l = temp_units.back();
+                    l.m_x = x;
+                    l.m_bool = false;
+
+                    l.m_int = m_is_int[x];
+                    l.m_open = upp->m_open;
+                    l.m_lower = false;
+                    l.m_val = &upp->m_val;
+                }
+            }
+        }
+    }
+    
+    if (temp_units.size() == 0)
+        return;
+
+    simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
+}
+
+template<typename C>
+void context_t<C>::convert_root_to_task() {
+    node * n = m_root;
+    task_info & task = m_bicp_task;
+    // SASSERT(task.m_node_id == UINT32_MAX);
+    task.m_node_id = n->id();
+    task.m_depth = n->depth();
+    vector<lit> temp_units;
+    vector<vector<lit>> temp_clauses;
     // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
     //     clause * cla = (*m_ptr_clauses)[i];
     for (unsigned i = 0, isz = m_clauses.size(); i < isz; ++i) {
@@ -2349,9 +2589,11 @@ void context_t<C>::convert_node_to_task(node * n) {
             temp_units.push_back(std::move(simp_lit_cla[0]));
         }
         else {
-            task.m_clauses.push_back(std::move(lit_cla));
+            temp_clauses.push_back(std::move(simp_lit_cla));
         }
     }
+    
+    remove_dominated_clauses(temp_clauses, task.m_clauses);
     
     for (unsigned i = 0, sz = m_unit_clauses.size(); i < sz; ++i) {
         atom * at = UNTAG(atom*, m_unit_clauses[i]);
@@ -2431,11 +2673,9 @@ void context_t<C>::convert_node_to_task(node * n) {
             }
         }
     }
-    unsigned temp_units_sz = temp_units.size();
-    if (temp_units_sz == 0)
+    if (temp_units.size() == 0)
         return;
     
-    // TBD
     simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
 }
 
@@ -2776,10 +3016,17 @@ typename context_t<C>::node * context_t<C>::select_next_node() {
     //     return nullptr;
     // SASSERT(!m_leaf_heap.empty());
     {
-        m_temp_stringstream << "[leaf heap top] node-" << m_leaf_heap.top().m_id
-            << ": depth=" << m_leaf_heap.top().m_depth << ", undef_clause_num=" << m_leaf_heap.top().m_undef_clause_num
-            << ", undef_lit_num=" << m_leaf_heap.top().m_undef_lit_num;
-        write_debug_ss_line_to_coordinator();
+        const node_info & ni = m_leaf_heap.top();
+        if (ni.m_id % (1 << 5) == 1) {
+            m_temp_stringstream << "[leaf heap top] node-" << ni.m_id
+                << ": depth=" << ni.m_depth << ", undef_clause_num=" <<ni.m_undef_clause_num
+                << ", undef_lit_num=" << ni.m_undef_lit_num;
+            if (ni.m_undef_clause_num > 0) {
+                m_temp_stringstream
+                    << ", avg_clause_length=" << static_cast<double>(ni.m_undef_lit_num) / static_cast<double>(ni.m_undef_clause_num);
+            }
+            write_debug_ss_line_to_coordinator();
+        }
     }
     unsigned nid = m_leaf_heap.top().m_id;
     m_leaf_heap.pop();
@@ -2939,6 +3186,11 @@ void context_t<C>::rebuild_clauses_after_bicp() {
 }
 
 template<typename C>
+void context_t<C>::store_root_task_after_bicp() {
+    m_ptask->copy(m_bicp_task);
+}
+
+template<typename C>
 bool context_t<C>::create_new_task() {
     TRACE("subpaving_stats", statistics st; collect_statistics(st); tout << "statistics:\n"; st.display_smt2(tout););
     TRACE("subpaving_main", display_params(tout););
@@ -2960,18 +3212,37 @@ bool context_t<C>::create_new_task() {
         }
         TRACE("subpaving_main", tout << "node #" << n->id() << " after propagation\n";
                 display_bounds(tout, n););
-        convert_node_to_task(n);
-        // if (n->depth() == 0) {
-        //     m_root_bicp_done = true;
-        //     m_ptr_wlist = &m_bicp_wlist;
-        //     m_ptr_units = &m_bicp_unit_clauses;
-        //     m_ptr_clauses = &m_bicp_clauses;
-        //     rebuild_clauses_after_bicp();
-        // }
+        
+        m_conj_simplified_cnt = 0;
+        m_disj_simplified_cnt = 0;
+        if (m_root_bicp_done) {
+            convert_node_to_task(n);
+        }
+        else {
+            m_root_bicp_done = true;
+            convert_root_to_task();
+            store_root_task_after_bicp();
+            // m_ptr_wlist = &m_bicp_wlist;
+            // m_ptr_units = &m_bicp_unit_clauses;
+            // m_ptr_clauses = &m_bicp_clauses;
+            // rebuild_clauses_after_bicp();
+            {
+                m_temp_stringstream << "m_root_bicp_done";
+                write_debug_ss_line_to_coordinator();
+            }
+        }
         {
             m_temp_stringstream << "alive tasks: "<< m_alive_task_num
                 << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
             write_debug_ss_line_to_coordinator();
+            if (m_disj_simplified_cnt > 0) {
+                m_temp_stringstream << "node-" << n->id() << " m_disj_simplified_cnt (logic or): " << m_disj_simplified_cnt;
+                write_debug_ss_line_to_coordinator();
+            }
+            if (m_conj_simplified_cnt > 0) {
+                m_temp_stringstream << "node-" << n->id() << " m_conj_simplified_cnt (logic and): " << m_conj_simplified_cnt;
+                write_debug_ss_line_to_coordinator();
+            }
         }
         return true;
     }
