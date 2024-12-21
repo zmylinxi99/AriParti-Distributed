@@ -617,15 +617,7 @@ class Coordinator:
             else:
                 assert(False)
     
-    # def init_coord_0(self):
-    #     self.solve_leader_root()
-    #     if self.pre_partition():
-    #         self.solving_round_done()
-    
     def interactive_solve(self):
-        # if self.rank == 0:
-        #     self.init_coord_0()
-        
         while True:
             self.receive_message_from_leader()
             if self.status.is_solving():

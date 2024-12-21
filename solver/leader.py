@@ -325,33 +325,9 @@ class Leader:
         
         self.tree.node_partial_solved(self.tree.root, NodeStatus.unsat)
     
-    # def setup_distributed_solving(self):
-    #     if self.init_coord_0():
-    #         return True
-    #     msg_status = MPI.Status()
-    #     while True:
-    #         if not MPI.COMM_WORLD.Iprobe(source=MPI.ANY_SOURCE, tag=1, status=msg_status):
-    #             continue
-    #         src = msg_status.Get_source()
-    #         msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=src, tag=1)
-    #         logging.debug(f'receive {msg_type} message from coordinator-{src}')
-    #         if msg_type.is_notify_result():
-    #             # coordinator {src} solved the assigned task
-    #             if self.process_notified_result(src):
-    #                 return True
-    #         elif msg_type.is_pre_partition_done():
-    #             self.pre_partition()
-    #             return False
-    #         elif msg_type.is_notify_error():
-    #             raise CoordinatorErrorMessage()
-    #         else:
-    #             assert(False)
-    
     def solve(self):
         if self.init_coord_isolated():
             return
-        # if self.setup_distributed_solving():
-        #     return
         # communicate with coordinators
         while True:
             if self.check_coordinators():

@@ -814,6 +814,7 @@ private:
     ptr_buffer<atom>        m_temp_atom_buffer;
     unsigned                m_conj_simplified_cnt;
     unsigned                m_disj_simplified_cnt;
+    unsigned                m_skip_clause_cnt;
     // unsigned                m_rm_dom_cnt;
     // random_gen              m_rand;
 
@@ -1065,9 +1066,11 @@ private:
 
     void remove_dominated_clauses(vector<vector<lit>> & input, vector<vector<lit>> & output);
     
-    void simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction);
+    bool simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction);
 
-    void convert_node_to_task(node * n);
+    void convert_node_task_to_task(node * n);
+
+    bool convert_node_to_task(node * n);
 
     void convert_root_to_task();
     

@@ -1992,10 +1992,11 @@ template<typename C>
 void context_t<C>::propagate(node * n) {
     m_curr_propagate = 0;
     unsigned prop_start = static_cast<unsigned>(std::time(nullptr));
-    while (!inconsistent(n) && m_qhead < m_queue.size()
-            && m_curr_propagate < m_max_propagate
-            && static_cast<unsigned>(std::time(nullptr)) - prop_start <= m_max_prop_time) {
-        unsigned prop_time = static_cast<unsigned>(std::time(nullptr)) - prop_start;
+    unsigned prop_time;
+    while (!inconsistent(n) && m_qhead < m_queue.size()) {
+        if (m_curr_propagate >= m_max_propagate)
+            break;
+        prop_time = static_cast<unsigned>(std::time(nullptr)) - prop_start;
         if (n->id() == 0) {
             if (prop_time > m_root_max_prop_time)
                 break;
@@ -2012,6 +2013,14 @@ void context_t<C>::propagate(node * n) {
             propagate_bvar(n, b);
         else
             propagate(n, b);
+    }
+    {
+        m_temp_stringstream
+            << "node " << n->id()
+            << ", propagated cnt: " << m_curr_propagate
+            << "(" << m_max_propagate << ")"
+            << ", time: " << prop_time;
+        write_debug_ss_line_to_coordinator();
     }
     TRACE("linxi_subpaving", tout << "node #" << n->id() << " after propagation\n";
             display_bounds(tout, n););
@@ -2337,18 +2346,71 @@ void context_t<C>::remove_dominated_clauses(vector<vector<lit>> & input, vector<
 }
 
 template<typename C>
-void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
+bool context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
     var current_var = null_var;
     lit current_lb, current_ub;
     ineq_lit_cmp ilc(nm());
     
     std::sort(input.begin(), input.end(), lit_lt(nm()));
+    
     for (unsigned i = 0, isz = input.size(); i < isz; ++i) {
         if (input[i].is_bool_lit() || input[i].is_eq_lit()) {
             output.push_back(input[i]);
         }
         else if (input[i].is_ineq_lit()) {
             if (input[i].m_x != current_var) {
+                if (is_conjunction) {
+                    if (current_lb.m_x != null_var && current_ub.m_x != null_var) {
+                        // lb > ub: x > 3   and x < 1   (unsat)
+                        if (nm().gt(*current_lb.m_val, *current_ub.m_val)) {
+                            output.reset();
+                            return true;
+                        }
+                        else if (nm().eq(*current_lb.m_val, *current_ub.m_val)) {
+                            // lb == ub: 
+                            // x > 3  and x < 3   (unsat)
+                            // x >= 3 and x < 3   (unsat)
+                            // x > 3  and x <= 3  (unsat)
+                            if (current_lb.m_open || current_ub.m_open) {
+                                output.reset();
+                                return true;
+                            }
+                            // else {
+                            // // x >= 3 and x <= 3  (unknown)
+                            // //#linxi TBD mk eq lit: x == 3
+                            // }
+                        }
+                        // else {
+                        //     // lb < ub: x > 1   and x < 3   (unknown)
+                        // }
+                    }
+                }
+                else {
+                    if (current_lb.m_x != null_var && current_ub.m_x != null_var) {
+                        // lb < ub: x > 1   or x < 3   (tautology)
+                        if (nm().lt(*current_lb.m_val, *current_ub.m_val)) {
+                            output.reset();
+                            return true;
+                        }
+                        else if (nm().eq(*current_lb.m_val, *current_ub.m_val)) {
+                            // lb == ub: x >= 3 or x < 3   (tautology)
+                            // lb == ub: x > 3  or x <= 3  (tautology)
+                            // lb == ub: x >= 3 or x <= 3  (tautology)
+                            
+                            if (!current_lb.m_open || !current_ub.m_open) {
+                                output.reset();
+                                return true;
+                            }
+                            // else {
+                            // // lb == ub: x > 3  or x < 3   (unknown)
+                            // //#linxi TBD mk eq lit: x != 3
+                            // }
+                        }
+                        // else {
+                        //     // lb > ub: x > 3   or x < 1   (unknown)
+                        // }
+                    }
+                }
                 if (current_lb.m_x != null_var) {
                     output.push_back(current_lb);
                     current_lb.reset();
@@ -2401,6 +2463,53 @@ void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
             assert(false);
         }
     }
+    if (is_conjunction) {
+        if (current_lb.m_x != null_var && current_ub.m_x != null_var) {
+            // lb > ub: x > 3   and x < 1   (unsat)
+            if (nm().gt(*current_lb.m_val, *current_ub.m_val)) {
+                output.reset();
+                return true;
+            }
+            else if (nm().eq(*current_lb.m_val, *current_ub.m_val)) {
+                // lb == ub: 
+                // x > 3  and x < 3   (unsat)
+                // x >= 3 and x < 3   (unsat)
+                // x > 3  and x <= 3  (unsat)
+                // x >= 3 and x <= 3  (unknown)
+                //#linxi TBD mk eq lit: x == 3
+                if (current_lb.m_open || current_ub.m_open) {
+                    output.reset();
+                    return true;
+                }
+            }
+            // else {
+            //     // lb < ub: x > 1   and x < 3   (unknown)
+            // }
+        }
+    }
+    else {
+        if (current_lb.m_x != null_var && current_ub.m_x != null_var) {
+            // lb < ub: x > 1   or x < 3   (tautology)
+            if (nm().lt(*current_lb.m_val, *current_ub.m_val)) {
+                output.reset();
+                return true;
+            }
+            else if (nm().eq(*current_lb.m_val, *current_ub.m_val)) {
+                // lb == ub: x >= 3 or x < 3   (tautology)
+                // lb == ub: x > 3  or x <= 3  (tautology)
+                // lb == ub: x >= 3 or x <= 3  (tautology)
+                // lb == ub: x > 3  or x < 3   (unknown)
+                //#linxi TBD mk eq lit: x != 3
+                if (!current_lb.m_open || !current_ub.m_open) {
+                    output.reset();
+                    return true;
+                }
+            }
+            // else {
+            //     // lb > ub: x > 3   or x < 1   (unknown)
+            // }
+        }
+    }
     if (current_lb.m_x != null_var) {
         output.push_back(current_lb);
         current_lb.reset();
@@ -2415,10 +2524,11 @@ void context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
         m_conj_simplified_cnt += reduced;
     else
         m_disj_simplified_cnt += reduced;
+    return false;
 }
 
 template<typename C>
-void context_t<C>::convert_node_to_task(node * n) {
+void context_t<C>::convert_node_task_to_task(node * n) {
     task_info & task = *m_ptask;
     // SASSERT(task.m_node_id == UINT32_MAX);
     task.m_node_id = n->id();
@@ -2534,9 +2644,8 @@ void context_t<C>::convert_node_to_task(node * n) {
 }
 
 template<typename C>
-void context_t<C>::convert_root_to_task() {
-    node * n = m_root;
-    task_info & task = m_bicp_task;
+bool context_t<C>::convert_node_to_task(node * n) {
+    task_info & task = *m_ptask;
     // SASSERT(task.m_node_id == UINT32_MAX);
     task.m_node_id = n->id();
     task.m_depth = n->depth();
@@ -2573,6 +2682,13 @@ void context_t<C>::convert_root_to_task() {
         }
         if (skippable)
             continue;
+        if (m_temp_atom_buffer.size() == 0) {
+            {
+                m_temp_stringstream << "UNSAT: empty clause in node: " << n->id();
+                write_debug_ss_line_to_coordinator();
+            }
+            return true;
+        }
         if (m_temp_atom_buffer.size() == 1) {
             temp_units.push_back(std::move(convert_atom_to_lit(m_temp_atom_buffer[0])));
             continue;
@@ -2584,12 +2700,19 @@ void context_t<C>::convert_root_to_task() {
             atom * a = m_temp_atom_buffer[j];
             lit_cla.push_back(std::move(convert_atom_to_lit(a)));
         }
-        simplify_ineqs_in_clause(lit_cla, simp_lit_cla, false);
-        if (simp_lit_cla.size() == 1) {
-            temp_units.push_back(std::move(simp_lit_cla[0]));
+        // temp_clauses.push_back(std::move(lit_cla));
+        if (simplify_ineqs_in_clause(lit_cla, simp_lit_cla, false)) {
+            ++m_skip_clause_cnt;
         }
         else {
-            temp_clauses.push_back(std::move(simp_lit_cla));
+            unsigned simp_sz = simp_lit_cla.size();
+            assert(simp_sz > 0);
+            if (simp_sz == 1) {
+                temp_units.push_back(std::move(simp_lit_cla[0]));
+            }
+            else {
+                temp_clauses.push_back(std::move(simp_lit_cla));
+            }
         }
     }
     
@@ -2673,6 +2796,163 @@ void context_t<C>::convert_root_to_task() {
             }
         }
     }
+    if (temp_units.size() == 0)
+        return false;
+    if (simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true)) {
+        {
+            m_temp_stringstream << "UNSAT: conflict unit clauses in node: " << n->id();
+            write_debug_ss_line_to_coordinator();
+        }
+        return true;
+    }
+    return false;
+}
+
+template<typename C>
+void context_t<C>::convert_root_to_task() {
+    node * n = m_root;
+    task_info & task = m_bicp_task;
+    // SASSERT(task.m_node_id == UINT32_MAX);
+    task.m_node_id = n->id();
+    task.m_depth = n->depth();
+    vector<lit> temp_units;
+    vector<vector<lit>> temp_clauses;
+    // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
+    //     clause * cla = (*m_ptr_clauses)[i];
+    for (unsigned i = 0, isz = m_clauses.size(); i < isz; ++i) {
+        clause * cla = m_clauses[i];
+        m_temp_atom_buffer.reset();
+        bool skippable = false;
+        for (unsigned j = 0, jsz = cla->m_size; j < jsz; ++j) {
+            atom * a = (*cla)[j];
+            lbool res = value(a, n);
+            TRACE("linxi_subpaving",
+                tout << "atom: ";
+                display(tout, a);
+                tout << "\n";
+                tout << "bool: " << a->is_bool() << "\n";
+                tout << "open: " << a->is_open() << "\n";
+                tout << "lower: " << a->is_lower() << "\n";
+                tout << "res: " << res << "\n";
+            );
+            if (res == l_true) {
+                skippable = true;
+                break;
+            }
+            else if (res == l_false) {
+                continue;
+            }
+            else {
+                m_temp_atom_buffer.push_back(a);
+            }
+        }
+        if (skippable)
+            continue;
+        if (m_temp_atom_buffer.size() == 1) {
+            temp_units.push_back(std::move(convert_atom_to_lit(m_temp_atom_buffer[0])));
+            continue;
+        }
+        ++task.m_undef_clause_num;
+        task.m_undef_lit_num += m_temp_atom_buffer.size();
+        vector<lit> lit_cla, simp_lit_cla;
+        for (unsigned j = 0, jsz = m_temp_atom_buffer.size(); j < jsz; ++j) {
+            atom * a = m_temp_atom_buffer[j];
+            lit_cla.push_back(std::move(convert_atom_to_lit(a)));
+        }
+        simplify_ineqs_in_clause(lit_cla, simp_lit_cla, false);
+        if (simp_lit_cla.size() == 1) {
+            temp_units.push_back(std::move(simp_lit_cla[0]));
+        }
+        else {
+            temp_clauses.push_back(std::move(simp_lit_cla));
+        }
+    }
+    remove_dominated_clauses(temp_clauses, task.m_clauses);
+
+    // if (m_root_bicp_done)
+    //     task.m_clauses.append(temp_clauses);
+    // else
+    //     remove_dominated_clauses(temp_clauses, task.m_clauses);
+    
+    for (unsigned i = 0, sz = m_unit_clauses.size(); i < sz; ++i) {
+        atom * at = UNTAG(atom*, m_unit_clauses[i]);
+        if (m_defs[at->m_x] == nullptr)
+            continue;
+        temp_units.push_back(std::move(convert_atom_to_lit(at)));
+        // ++task.m_undef_clause_num;
+        // ++task.m_undef_lit_num;
+    }
+
+    for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
+        atom * at = n->up_atoms()[i];
+        if (m_defs[at->m_x] == nullptr)
+            continue;
+        temp_units.push_back(std::move(convert_atom_to_lit(at)));
+        // ++task.m_undef_clause_num;
+        // ++task.m_undef_lit_num;
+    }
+
+    for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
+        if (m_defs[x] != nullptr)
+            continue;
+        if (m_is_bool[x] && n->bvalue(x) == bvalue_kind::b_undef)
+            continue;
+        if (!m_is_bool[x] && n->lower(x) == nullptr && n->upper(x) == nullptr)
+            continue;
+        if (m_is_bool[x]) {
+            temp_units.push_back(lit());
+            lit & l = temp_units.back();
+            l.m_x = x;
+            l.m_bool = true;
+            l.m_open = false;
+            if (n->bvalue(x) == b_false)
+                l.m_lower = true;
+            else if (n->bvalue(x) == b_true)
+                l.m_lower = false;
+            else
+                UNREACHABLE();
+        }
+        else {
+            bound * low = n->lower(x);
+            bound * upp = n->upper(x);
+            if (low != nullptr && upp != nullptr && nm().eq(low->value(), upp->value())) {
+                temp_units.push_back(lit());
+                lit & l = temp_units.back();
+                l.m_x = x;
+                l.m_bool = true;
+                l.m_open = true;
+
+                l.m_int = m_is_int[x];
+                l.m_lower = false;
+                l.m_val = &low->m_val;
+            }
+            else {
+                if (low != nullptr) {
+                    temp_units.push_back(lit());
+                    lit & l = temp_units.back();
+                    l.m_x = x;
+                    l.m_bool = false;
+
+                    l.m_int = m_is_int[x];
+                    l.m_open = low->m_open;
+                    l.m_lower = true;
+                    l.m_val = &low->m_val;
+                }
+                if (upp != nullptr) {
+                    temp_units.push_back(lit());
+                    lit & l = temp_units.back();
+                    l.m_x = x;
+                    l.m_bool = false;
+
+                    l.m_int = m_is_int[x];
+                    l.m_open = upp->m_open;
+                    l.m_lower = false;
+                    l.m_val = &upp->m_val;
+                }
+            }
+        }
+    }
+    
     if (temp_units.size() == 0)
         return;
     
@@ -2770,7 +3050,7 @@ void context_t<C>::select_best_var(node * n) {
             bound * l = n->lower(x);
             bound * u = n->upper(x);
             if (l != nullptr && u != nullptr 
-            && nm().eq(l->value(), u->value())) {
+             && nm().eq(l->value(), u->value())) {
                 continue;
             }
             if (m_var_occs[x] == 0)
@@ -3215,22 +3495,44 @@ bool context_t<C>::create_new_task() {
         
         m_conj_simplified_cnt = 0;
         m_disj_simplified_cnt = 0;
-        if (m_root_bicp_done) {
-            convert_node_to_task(n);
-        }
-        else {
+        m_skip_clause_cnt = 0;
+        bool is_unsat = convert_node_to_task(n);
+        if (!m_root_bicp_done) {
             m_root_bicp_done = true;
-            convert_root_to_task();
-            store_root_task_after_bicp();
-            // m_ptr_wlist = &m_bicp_wlist;
-            // m_ptr_units = &m_bicp_unit_clauses;
-            // m_ptr_clauses = &m_bicp_clauses;
-            // rebuild_clauses_after_bicp();
+            // store_root_task_after_bicp();
             {
                 m_temp_stringstream << "m_root_bicp_done";
                 write_debug_ss_line_to_coordinator();
             }
         }
+        if (is_unsat) {
+            m_ptask->reset();
+            node * pa = n->parent();
+            int pid = -1;
+            if (pa != nullptr)
+                pid = static_cast<int>(pa->id());
+            m_temp_stringstream << control_message::P2C::new_unsat_node 
+                                << " " << n->id() << " " << pid;
+            write_ss_line_to_coordinator();
+            m_nodes_state[n->id()] = node_state::UNSAT;
+            continue;
+        }
+        // if (m_root_bicp_done) {
+        //     convert_node_task_to_task(n);
+        // }
+        // else {
+        //     m_root_bicp_done = true;
+        //     convert_root_to_task();
+        //     store_root_task_after_bicp();
+        //     // m_ptr_wlist = &m_bicp_wlist;
+        //     // m_ptr_units = &m_bicp_unit_clauses;
+        //     // m_ptr_clauses = &m_bicp_clauses;
+        //     // rebuild_clauses_after_bicp();
+        //     {
+        //         m_temp_stringstream << "m_root_bicp_done";
+        //         write_debug_ss_line_to_coordinator();
+        //     }
+        // }
         {
             m_temp_stringstream << "alive tasks: "<< m_alive_task_num
                 << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
@@ -3241,6 +3543,10 @@ bool context_t<C>::create_new_task() {
             }
             if (m_conj_simplified_cnt > 0) {
                 m_temp_stringstream << "node-" << n->id() << " m_conj_simplified_cnt (logic and): " << m_conj_simplified_cnt;
+                write_debug_ss_line_to_coordinator();
+            }
+            if (m_skip_clause_cnt > 0) {
+                m_temp_stringstream << "node-" << n->id() << " m_skip_clause_cnt: " << m_skip_clause_cnt;
                 write_debug_ss_line_to_coordinator();
             }
         }
