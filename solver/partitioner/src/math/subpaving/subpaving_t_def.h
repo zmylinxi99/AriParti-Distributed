@@ -310,13 +310,13 @@ void context_t<C>::updt_params(params_ref const & p) {
     nm().set(m_minus_max_bound, m_max_bound);
     nm().neg(m_minus_max_bound);
 
-    // max denominator 10^15
+    // max denominator 10^10
     nm().set(m_max_denominator, 10);
-    nm().power(m_max_denominator, 15, m_max_denominator);
+    nm().power(m_max_denominator, 10, m_max_denominator);
 
-    // denominator after adjust 10^10
+    // denominator after adjust 10^6
     nm().set(m_adjust_denominator, 10);
-    nm().power(m_adjust_denominator, 10, m_adjust_denominator);
+    nm().power(m_adjust_denominator, 6, m_adjust_denominator);
     
 
     m_max_depth = p.get_uint("max_depth", 128);
@@ -1994,8 +1994,8 @@ void context_t<C>::propagate(node * n) {
     unsigned prop_start = static_cast<unsigned>(std::time(nullptr));
     unsigned prop_time;
     while (!inconsistent(n) && m_qhead < m_queue.size()) {
-        if (m_curr_propagate >= m_max_propagate)
-            break;
+        // if (m_curr_propagate >= m_max_propagate)
+        //     break;
         prop_time = static_cast<unsigned>(std::time(nullptr)) - prop_start;
         if (n->id() == 0) {
             if (prop_time > m_root_max_prop_time)
@@ -2157,8 +2157,9 @@ void context_t<C>::init_partition() {
     else if (m_max_propagate < 256u)
         m_max_propagate = 256u;
     
-    m_root_max_prop_time = 20;
-    m_max_prop_time = 10; // second
+    // second
+    m_root_max_prop_time = 10;
+    m_max_prop_time = 5;
 
     m_ptask->reset();
     m_var_occs.resize(num_vars());
