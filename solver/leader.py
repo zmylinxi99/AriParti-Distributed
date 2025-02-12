@@ -315,6 +315,7 @@ class Leader:
         pp_num_nodes: int = MPI.COMM_WORLD.recv(source=src_coord, tag=2)
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                     dest=src_coord, tag=1)
+        logging.debug(f'pre-partition {pp_num_nodes} nodes')
         for i in range(self.num_dist_coords):
             if i < pp_num_nodes:
                 self.coordinators[src_coord].status = CoordinatorStatus.splitting

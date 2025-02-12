@@ -93,7 +93,8 @@ if __name__ == '__main__':
         'mpiexec',
         ### COMP-UPDATE ###
         # '--mca btl_tcp_if_include eth0',
-        '--mca btl_tcp_if_include enp1s0f1',
+        # '--mca btl_tcp_if_include enp1s0f1',
+        '--mca btl_tcp_if_include ens6f0',
         '--allow-run-as-root',
         '--use-hwthread-cpus',
         '--bind-to none', '--report-bindings',
