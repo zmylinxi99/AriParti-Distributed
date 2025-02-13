@@ -195,8 +195,8 @@ class Coordinator:
     def receive_partitioner_messages_limited(self):
         cnt = 0
         while not self.partitioner.is_receive_done():
-            # if cnt >= 256:
-            #     break
+            if cnt >= 32:
+                break
             cnt += 1
             msg = self.partitioner.receive_message()
             # logging.debug(f'partitioner-status {self.partitioner.status}')

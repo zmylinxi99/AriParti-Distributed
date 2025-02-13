@@ -1,3 +1,5 @@
+import os
+import fcntl
 import select
 import logging
 import subprocess
@@ -41,9 +43,15 @@ class PartitionerStatus(Enum):
     
 class Partitioner:
     def __init__(self, p: subprocess.Popen):
-        self.p: subprocess.Popen = p
         self.status = PartitionerStatus.running
         self.result = PartitionerResult.unsolved
+        self.partial_line = ''
+        self.buffer = None
+        
+        self.p: subprocess.Popen = p
+        
+        flags = fcntl.fcntl(self.p.stdout, fcntl.F_GETFL)
+        fcntl.fcntl(self.p.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
     
     def is_running(self):
         return self.status.is_running()
@@ -91,16 +99,51 @@ class Partitioner:
         self.p.stdin.write(msg + '\n')
         self.p.stdin.flush()
     
-    def receive_message(self):
+    # def receive_message(self):
+    #     ready, _, _ = select.select([self.p.stdout], [], [], 0.1)
+    #     if ready:
+    #         line: str = self.p.stdout.readline()
+    #         # if self.status.is_process_done() and line == '':
+    #         if line == '':
+    #             logging.debug(f'partitioner receive_done')
+    #             self.status = PartitionerStatus.receive_done
+    #             return self.p.stdout.read()
+    #         line = line.strip(' \n')
+    #         # logging.debug(f'line: {line}')
+    #         return line
+    #     return None
+    
+    def read_from_process(self):
         ready, _, _ = select.select([self.p.stdout], [], [], 0.1)
         if ready:
-            line: str = self.p.stdout.readline()
-            # if self.status.is_process_done() and line == '':
-            if line == '':
-                logging.debug(f'partitioner receive_done')
+            data = self.p.stdout.read()
+            # logging.debug(f'data {data}')
+            if data == '' and not self.check_running():
                 self.status = PartitionerStatus.receive_done
-                return self.p.stdout.read()
-            line = line.strip(' \n')
-            # logging.debug(f'line: {line}')
-            return line
-        return None
+                return False
+            self.buffer = data
+            self.buffer_head = 0
+            self.buffer_tail = len(self.buffer)
+            return True
+        return False
+    
+    def receive_message(self):
+        if self.buffer is None:
+            if not self.read_from_process():
+                # None or partial line
+                if not self.status.is_receive_done():
+                    return None
+                else:
+                    return self.partial_line
+        
+        next_eol = self.buffer.find('\n', self.buffer_head)
+        if next_eol != -1:
+            ret = self.partial_line + self.buffer[self.buffer_head: next_eol]
+            self.buffer_head = next_eol + 1
+            self.partial_line = ''
+            return ret
+        else:
+            self.partial_line += self.buffer[self.buffer_head: ]
+            self.buffer = None
+            return None
+    
