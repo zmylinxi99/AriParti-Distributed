@@ -68,7 +68,8 @@ class Leader:
         logging.debug(f'temp_folder_path: {self.temp_folder_path}')
         
         self.idle_coordinators = deque()
-        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.leader_rank)]
+        # dist coords and isolated coord
+        self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_dist_coords + 1)]
         ### TBD ### select split coordinator with priority
         self.next_split_rank = 0
         # logging.debug(f'init done!')
@@ -315,7 +316,11 @@ class Leader:
         pp_num_nodes: int = MPI.COMM_WORLD.recv(source=src_coord, tag=2)
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                     dest=src_coord, tag=1)
-        logging.debug(f'pre-partition {pp_num_nodes} nodes')
+        
+        if pp_num_nodes == 0:
+            logging.debug('pre-partitioning failed.')
+            pp_num_nodes = 1
+        
         for i in range(self.num_dist_coords):
             if i < pp_num_nodes:
                 self.coordinators[src_coord].status = CoordinatorStatus.splitting
@@ -323,7 +328,7 @@ class Leader:
                 self.update_split_assign_info(src_coord, i)
             else:
                 self.idle_coordinators.append(i)
-        
+            
         self.tree.node_partial_solved(self.tree.root, NodeStatus.unsat)
     
     def solve(self):

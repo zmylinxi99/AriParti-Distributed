@@ -785,8 +785,6 @@ private:
     bool                m_partitioner_debug;
     std::stringstream   m_temp_stringstream;
     
-    clock_t             m_start_time;
-
     unsigned            m_alive_task_num;
     unsigned            m_unsolved_task_num;
     // ptr_vector<node>    m_alive_tasks;

@@ -195,10 +195,12 @@ class Coordinator:
     def receive_partitioner_messages_limited(self):
         cnt = 0
         while not self.partitioner.is_receive_done():
-            if cnt >= 16:
-                break
+            # if cnt >= 256:
+            #     break
             cnt += 1
             msg = self.partitioner.receive_message()
+            # logging.debug(f'partitioner-status {self.partitioner.status}')
+            # logging.debug(f'partitioner-message {msg}')
             if msg == None:
                 break
             if msg == '':
@@ -216,7 +218,11 @@ class Coordinator:
             return
         self.partitioner.check_running()
         while True:
+            # logging.debug(f'partitioner-status {self.partitioner.status}')
             self.receive_partitioner_messages_limited()
+            # running: break
+            # process_done: loop until receive_done
+            # receive_done: break
             if not self.partitioner.is_process_done():
                 break
     
@@ -258,6 +264,7 @@ class Coordinator:
     def send_partitioner_message(self, msg: str):
         logging.debug(f'send_partitioner_message: {msg}')
         if not self.partitioner.check_running():
+            logging.debug(f'send_partitioner_message failed for partitioner is not running')
             # logging.debug(f'failed')
             return
         # logging.debug(f'succeed')
@@ -485,10 +492,10 @@ class Coordinator:
                     subnodes.append(self.tree.root)
             if len(subnodes) > 0:
                 while len(subnodes) < self.num_dist_coords:
-                    node: ParallelNode = subnodes[0]
+                    node: ParallelNode = subnodes.popleft()
                     if len(node.children) < 2:
+                        subnodes.append(node)
                         break
-                    subnodes.popleft()
                     for child in node.children:
                         if child.status.is_unsolved():
                             subnodes.append(child)
@@ -496,9 +503,10 @@ class Coordinator:
                     break
             if self.get_coordinator_time() > 20.0:
                 break
-            time.sleep(0.01)
+            time.sleep(0.1)
         
         pp_num_nodes = len(subnodes)
+        logging.debug(f'pre-partition split {pp_num_nodes} node(s)')
         # assert(pp_num_nodes > 0)
         MPI.COMM_WORLD.send(ControlMessage.C2L.pre_partition_done,
                             dest=self.leader_rank, tag=1)
@@ -507,12 +515,16 @@ class Coordinator:
         msg_type: ControlMessage.L2C = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
         # assert(isinstance(msg_type, ControlMessage.L2C))
         if msg_type.is_assign_node():
-            for i in range(pp_num_nodes):
-                node = subnodes[i]
-                self.split_node = node
-                # self.set_node_split(node, i)
-                logging.debug(f'split node-{self.split_node.id} to coordinater-{i}')
-                self.send_split_node_to_coordinator(i)
+            if pp_num_nodes > 0:
+                for i in range(pp_num_nodes):
+                    node = subnodes[i]
+                    self.split_node = node
+                    # self.set_node_split(node, i)
+                    logging.debug(f'split node-{self.split_node.id} to coordinater-{i}')
+                    self.send_split_node_to_coordinator(i)
+            else:
+                logging.debug(f'split root-task to coordinater-0')
+                self.send_root_task_to_coordinator(0)
             return False
         elif msg_type.is_terminate_coordinator():
             raise TerminateMessage()
@@ -541,6 +553,14 @@ class Coordinator:
     
     def send_split_node_to_coordinator(self, target_rank):
         instance_path = f'{self.solving_folder_path}/task-{self.split_node.pid}.smt2'
+        logging.debug(f'split task path: {instance_path}')
+        with open(instance_path, 'br') as file:
+            instance_data = file.read()
+        MPI.COMM_WORLD.send(instance_data, 
+                            dest=target_rank, tag=2)
+        
+    def send_root_task_to_coordinator(self, target_rank):
+        instance_path = f'{self.solving_folder_path}/task-root.smt2'
         logging.debug(f'split task path: {instance_path}')
         with open(instance_path, 'br') as file:
             instance_data = file.read()

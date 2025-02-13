@@ -92,10 +92,11 @@ class Partitioner:
         self.p.stdin.flush()
     
     def receive_message(self):
-        ready, _, _ = select.select([self.p.stdout], [], [], 0.01)
+        ready, _, _ = select.select([self.p.stdout], [], [], 0.1)
         if ready:
             line: str = self.p.stdout.readline()
-            if self.status.is_process_done() and line == '':
+            # if self.status.is_process_done() and line == '':
+            if line == '':
                 logging.debug(f'partitioner receive_done')
                 self.status = PartitionerStatus.receive_done
                 return self.p.stdout.read()

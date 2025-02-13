@@ -2091,6 +2091,10 @@ void context_t<C>::write_ss_line_to_coordinator() {
     write_line_to_coordinator(m_temp_stringstream.str());
     m_temp_stringstream.str("");
     m_temp_stringstream.clear();
+    // {
+    //     m_temp_stringstream << "current time: " << std::time(nullptr);
+    //     write_debug_ss_line_to_coordinator();
+    // }
 }
 
 template<typename C>
@@ -2137,6 +2141,11 @@ bool context_t<C>::read_line_from_coordinator() {
 
 template<typename C>
 void context_t<C>::init_communication() {
+    // write configuration
+    std::ios::sync_with_stdio(false);
+    std::cout.setf(std::ios::unitbuf);
+
+    // read configuration
     int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
     fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
     
@@ -2362,7 +2371,7 @@ bool context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
             if (input[i].m_x != current_var) {
                 if (is_conjunction) {
                     if (current_lb.m_x != null_var && current_ub.m_x != null_var) {
-                        // lb > ub: x > 3   and x < 1   (unsat)
+                        // lb > ub: x > 3 and x < 1   (unsat)
                         if (nm().gt(*current_lb.m_val, *current_ub.m_val)) {
                             output.reset();
                             return true;
@@ -2397,7 +2406,6 @@ bool context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
                             // lb == ub: x >= 3 or x < 3   (tautology)
                             // lb == ub: x > 3  or x <= 3  (tautology)
                             // lb == ub: x >= 3 or x <= 3  (tautology)
-                            
                             if (!current_lb.m_open || !current_ub.m_open) {
                                 output.reset();
                                 return true;
