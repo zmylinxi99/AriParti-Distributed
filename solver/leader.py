@@ -118,7 +118,7 @@ class Leader:
     
     def init_logging(self):
         log_dir_path = f'{self.output_folder_path}/logs'
-        os.makedirs(log_dir_path, exist_ok=True)
+        # os.makedirs(log_dir_path, exist_ok=True)
         logging.basicConfig(format='%(relativeCreated)d - %(levelname)s - %(message)s', 
                 filename=f'{log_dir_path}/leader.log', level=logging.DEBUG)
         current_time = datetime.now()

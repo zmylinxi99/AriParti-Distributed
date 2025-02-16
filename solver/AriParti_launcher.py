@@ -5,7 +5,9 @@ import json
 import time
 import string
 import random
+import logging
 import subprocess
+from datetime import datetime
 
 def generate_random_string(length):
     characters = string.ascii_letters + string.digits
@@ -37,6 +39,14 @@ def check_get_model_flag(file):
         content = f.read()
         return int(content.find(r'(get-model)') != -1)
 
+def init_logging(log_dir_path):
+    os.makedirs(log_dir_path, exist_ok=True)
+    logging.basicConfig(format='%(relativeCreated)d - %(levelname)s - %(message)s', 
+            filename=f'{log_dir_path}/launcher.log', level=logging.DEBUG)
+    current_time = datetime.now()
+    formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+    logging.info(f'start-time {formatted_time}')
+
 if __name__ == '__main__':
     output_total_time = True
     
@@ -52,6 +62,14 @@ if __name__ == '__main__':
     worker_node_ips = config_data['worker_node_ips']
     worker_node_cores: list = config_data.get('worker_node_cores')
     
+    init_logging(f'{request_directory}/logs')
+    
+    logging.info(f'request_directory: {request_directory}')
+    logging.info(f'formula_file: {formula_file}')
+    logging.info(f'timeout_seconds: {timeout_seconds}')
+    logging.info(f'worker_node_ips: {worker_node_ips}')
+    logging.info(f'worker_node_cores: {worker_node_cores}')
+    
     # fixed_parallel_cores = 8
     # assert(worker_node_cores[0] > fixed_parallel_cores)
     
@@ -60,6 +78,8 @@ if __name__ == '__main__':
     # base_solver = 'z3pp-at-smt-comp-2023-bin'
     # base_solver = 'z3-4.12.1-bin'
     base_solver = 'cvc5-1.0.8-bin'
+    
+    logging.info(f'base_solver: {base_solver}')
     
     get_model_flag: int = check_get_model_flag(formula_file)
     
@@ -73,6 +93,8 @@ if __name__ == '__main__':
     temp_folder_name = generate_random_string(16)
     temp_folder_path = f'/tmp/ap-files/{temp_folder_name}'
     os.makedirs(temp_folder_path, exist_ok=True)
+    
+    logging.info(f'temp_folder_path: {temp_folder_path}')
     
     # solving_time_limit = timeout_seconds - 10
     solving_time_limit = timeout_seconds
@@ -102,7 +124,7 @@ if __name__ == '__main__':
     ]
     
     cmd_paras.extend([
-        f'python3 {script_dir}/AriParti.py',
+        f'python3 {script_dir}/dispatcher.py',
         # common parameters
         f'--temp-dir {temp_folder_path}',
         f'--output-dir {output_dir}',
@@ -122,6 +144,7 @@ if __name__ == '__main__':
     cmd = ' '.join(cmd_paras)
     # ##//linxi-test
     # print(f'command:\n{cmd}')
+    logging.info(f'command: {cmd}')
     
     result = subprocess.run(
         cmd,
@@ -135,6 +158,10 @@ if __name__ == '__main__':
     # print(result.stdout.decode('utf-8'))
     # print(f'stderr:')
     # print(result.stderr.decode('utf-8'))
+    logging.info(f'stdout:')
+    logging.info(result.stdout.decode('utf-8'))
+    logging.info(f'stderr:')
+    logging.info(result.stderr.decode('utf-8'))
     
     sys.stdout.write(result.stdout.decode('utf-8'))
     sys.stderr.write(result.stderr.decode('utf-8'))
