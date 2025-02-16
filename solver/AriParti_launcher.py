@@ -156,8 +156,12 @@ if __name__ == '__main__':
         f'--rankfile {output_dir}/rankfile',
     ]
     
+    dispatcher_path = os.path.join(script_dir, 'dispatcher.py')
+    solver_path = os.path.join(script_dir, 'binary-files', base_solver)
+    partitioner_path = os.path.join(script_dir, 'binary-files', 'partitioner-bin')
+    
     cmd_paras.extend([
-        f'python3 {script_dir}/dispatcher.py',
+        f'python3 {dispatcher_path}',
         # common parameters
         f'--temp-dir {temp_folder_path}',
         f'--output-dir {output_dir}',
@@ -167,10 +171,10 @@ if __name__ == '__main__':
         f'--time-limit {solving_time_limit}',
         # coordinator parameters
         # f'--temp-dir {temp_folder_path}',
-        f'--solver {script_dir}/binary-files/{base_solver}',
-        f'--available-cores-list '{json.dumps(worker_node_cores)}'',
+        f'--solver {solver_path}',
+        f'--available-cores-list "{json.dumps(worker_node_cores)}"',
         ##//linxi-test
-        f'--partitioner {script_dir}/binary-files/partitioner-bin',
+        f'--partitioner {partitioner_path}',
         # f'--partitioner {script_dir}/partitioner/build/z3',
     ])
     
