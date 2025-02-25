@@ -148,12 +148,13 @@ if __name__ == '__main__':
         'mpiexec',
         ### COMP-UPDATE ###
         # '--mca btl_tcp_if_include eth0',
-        '--mca btl_tcp_if_include enp1s0f1',
+        '--mca', 'btl_tcp_if_include', 'enp1s0f1',
         # '--mca btl_tcp_if_include ens6f0',
         '--allow-run-as-root',
         '--use-hwthread-cpus',
-        '--bind-to none', '--report-bindings',
-        f'--rankfile {output_dir}/rankfile',
+        '--bind-to', 'none',
+        '--report-bindings',
+        '--rankfile', f'{output_dir}/rankfile',
     ]
     
     dispatcher_path = os.path.join(script_dir, 'dispatcher.py')
@@ -161,20 +162,20 @@ if __name__ == '__main__':
     partitioner_path = os.path.join(script_dir, 'binary-files', 'partitioner-bin')
     
     cmd_paras.extend([
-        f'python3 {dispatcher_path}',
+        'python3', f'{dispatcher_path}',
         # common parameters
-        f'--temp-dir {temp_folder_path}',
-        f'--output-dir {output_dir}',
-        f'--get-model-flag {get_model_flag}',
+        '--temp-dir', f'{temp_folder_path}',
+        '--output-dir', f'{output_dir}',
+        '--get-model-flag', f'{get_model_flag}',
         # leader parameters
-        f'--file {formula_file}',
-        f'--time-limit {solving_time_limit}',
+        '--file', f'{formula_file}',
+        '--time-limit', f'{solving_time_limit}',
         # coordinator parameters
         # f'--temp-dir {temp_folder_path}',
-        f'--solver {solver_path}',
-        f'--available-cores-list "{json.dumps(worker_node_cores)}"',
+        '--solver', f'{solver_path}',
+        '--available-cores-list', json.dumps(worker_node_cores),
         ##//linxi-test
-        f'--partitioner {partitioner_path}',
+        '--partitioner', f'{partitioner_path}',
         # f'--partitioner {script_dir}/partitioner/build/z3',
     ])
     
