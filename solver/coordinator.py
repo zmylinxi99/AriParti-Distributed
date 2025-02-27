@@ -181,10 +181,6 @@ class Coordinator:
                             NodeReason.ancester)
                 else:
                     self.tree.waitings.append(node)
-                    # if node.id == 0:
-                    #     root_init_file = f'{self.solving_folder_path}/task-0.done'
-                    #     with open(root_init_file, 'w') as file:
-                    #         file.write('done')
                 # if pid % 10 == 0:
                 #     self.log_tree_infos()
                 self.log_tree_infos()
@@ -241,14 +237,16 @@ class Coordinator:
             # raise_error(f'return code = {rc}\nstdout: {out_data}\nstderr: {err_data}')
 
         assert(rc == 0)
-        if self.get_model_flag:
+        
+        if not self.get_model_flag:
+            sta: str = out_data.strip('\n').strip(' ')
+        else:
             lines = out_data.split('\n')
             sta: str = lines[0]
             if sta == 'sat':
                 self.model: str = '\n'.join(lines[1: ])
                 self.get_model_done = True
-        else:
-            sta: str = out_data.strip('\n').strip(' ')
+        
         if sta == 'sat':
             return NodeStatus.sat
         elif sta == 'unsat':

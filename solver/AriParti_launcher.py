@@ -35,9 +35,22 @@ def select_solver_for_logic(logic: str):
         raise ValueError(f'Unsupported logic: {logic}')
 
 def check_get_model_flag(file):
+    """
+    Returns 1 if an uncommented occurrence of "(get-model)" exists in file,
+    otherwise returns 0.
+    
+    Examples:
+      "(get-model)"                     => returns 1
+      "(get-model) ; (get-assignment)"  => returns 1
+      "; (get-model)"                   => returns 0
+      "(check-sat) ; (get-model)"       => returns 0
+    """
     with open(file, 'r') as f:
-        content = f.read()
-        return int(content.find(r'(get-model)') != -1)
+        for line in f:
+            code = line.split(';')[0]  # Remove comment from the line.
+            if '(get-model)' in code:
+                return 1
+    return 0
 
 def init_logging(log_dir_path):
     os.makedirs(log_dir_path, exist_ok=True)
@@ -176,7 +189,6 @@ if __name__ == '__main__':
         '--available-cores-list', json.dumps(worker_node_cores),
         ##//linxi-test
         '--partitioner', f'{partitioner_path}',
-        # f'--partitioner {script_dir}/partitioner/build/z3',
     ])
     
     # Use shlex.join for a safe command string construction

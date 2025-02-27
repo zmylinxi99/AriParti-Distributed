@@ -99,20 +99,6 @@ class Partitioner:
         self.p.stdin.write(msg + '\n')
         self.p.stdin.flush()
     
-    # def receive_message(self):
-    #     ready, _, _ = select.select([self.p.stdout], [], [], 0.1)
-    #     if ready:
-    #         line: str = self.p.stdout.readline()
-    #         # if self.status.is_process_done() and line == '':
-    #         if line == '':
-    #             logging.debug(f'partitioner receive_done')
-    #             self.status = PartitionerStatus.receive_done
-    #             return self.p.stdout.read()
-    #         line = line.strip(' \n')
-    #         # logging.debug(f'line: {line}')
-    #         return line
-    #     return None
-    
     def read_from_process(self):
         ready, _, _ = select.select([self.p.stdout], [], [], 0.1)
         if ready:

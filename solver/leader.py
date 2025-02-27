@@ -387,6 +387,7 @@ class Leader:
         print(result)
         if self.get_model_flag and result == 'sat':
             assert(self.model is not None)
+            # print('model: ')
             print(self.model)
         print(execution_time)
         logging.info(f'result: {result}, time: {execution_time}')
