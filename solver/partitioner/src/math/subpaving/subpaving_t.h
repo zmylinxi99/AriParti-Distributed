@@ -1051,7 +1051,6 @@ private:
     */
     void assert_units(node * n);
 
-
     //#linxi
 
     void init_communication();
@@ -1066,7 +1065,7 @@ private:
     
     bool simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction);
 
-    void convert_node_task_to_task(node * n);
+    // void convert_node_task_to_task(node * n);
 
     bool convert_node_to_task(node * n);
 
@@ -1111,9 +1110,9 @@ private:
 
     node * select_next_node();
     
-    void rebuild_clauses_after_bicp();
+    // void rebuild_clauses_after_bicp();
 
-    void store_root_task_after_bicp();
+    // void store_root_task_after_bicp();
     
     bool create_new_task();
 

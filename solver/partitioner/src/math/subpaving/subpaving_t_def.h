@@ -2536,124 +2536,126 @@ bool context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
     return false;
 }
 
-template<typename C>
-void context_t<C>::convert_node_task_to_task(node * n) {
-    task_info & task = *m_ptask;
-    // SASSERT(task.m_node_id == UINT32_MAX);
-    task.m_node_id = n->id();
-    task.m_depth = n->depth();
-    vector<lit> temp_units;
-    vector<lit> temp_lit_buffer;
-    vector<vector<lit>> temp_clauses;
-    // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
-    //     clause * cla = (*m_ptr_clauses)[i];
-    vector<vector<lit>> & clauses = m_bicp_task.m_clauses;
-    for (unsigned i = 0, isz = clauses.size(); i < isz; ++i) {
-        vector<lit> & cla = clauses[i];
-        temp_lit_buffer.reset();
-        bool skippable = false;
-        for (unsigned j = 0, jsz = cla.size(); j < jsz; ++j) {
-            lit & l = cla[j];
-            lbool res = value(l, n);
-            if (res == l_true) {
-                skippable = true;
-                break;
-            }
-            else if (res == l_false) {
-                continue;
-            }
-            else {
-                temp_lit_buffer.push_back(l);
-            }
-        }
-        if (skippable)
-            continue;
-        if (temp_lit_buffer.size() == 1) {
-            temp_units.push_back(std::move(temp_lit_buffer[0]));
-            continue;
-        }
-        ++task.m_undef_clause_num;
-        task.m_undef_lit_num += temp_lit_buffer.size();
-        task.m_clauses.push_back(std::move(temp_lit_buffer));
-    }
-    vector<lit> & var_bounds = m_bicp_task.m_var_bounds;
-    temp_units.append(var_bounds);
-    for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
-        atom * at = n->up_atoms()[i];
-        if (m_defs[at->m_x] == nullptr)
-            continue;
-        temp_units.push_back(std::move(convert_atom_to_lit(at)));
-    }
+// template<typename C>
+// void context_t<C>::convert_node_task_to_task(node * n) {
+//     task_info & task = *m_ptask;
+//     // SASSERT(task.m_node_id == UINT32_MAX);
+//     task.m_node_id = n->id();
+//     task.m_depth = n->depth();
+//     vector<lit> temp_units;
+//     vector<lit> temp_lit_buffer;
+//     vector<vector<lit>> temp_clauses;
+//     // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
+//     //     clause * cla = (*m_ptr_clauses)[i];
+//     vector<vector<lit>> & clauses = m_bicp_task.m_clauses;
+//     for (unsigned i = 0, isz = clauses.size(); i < isz; ++i) {
+//         vector<lit> & cla = clauses[i];
+//         temp_lit_buffer.reset();
+//         bool skippable = false;
+//         for (unsigned j = 0, jsz = cla.size(); j < jsz; ++j) {
+//             lit & l = cla[j];
+//             lbool res = value(l, n);
+//             if (res == l_true) {
+//                 skippable = true;
+//                 break;
+//             }
+//             else if (res == l_false) {
+//                 continue;
+//             }
+//             else {
+//                 temp_lit_buffer.push_back(l);
+//             }
+//         }
+//         if (skippable)
+//             continue;
+//         if (temp_lit_buffer.size() == 1) {
+//             temp_units.push_back(std::move(temp_lit_buffer[0]));
+//             continue;
+//         }
+//         ++task.m_undef_clause_num;
+//         task.m_undef_lit_num += temp_lit_buffer.size();
+//         task.m_clauses.push_back(std::move(temp_lit_buffer));
+//     }
+//     vector<lit> & var_bounds = m_bicp_task.m_var_bounds;
+//     temp_units.append(var_bounds);
+//     for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
+//         atom * at = n->up_atoms()[i];
+//         if (m_defs[at->m_x] == nullptr)
+//             continue;
+//         temp_units.push_back(std::move(convert_atom_to_lit(at)));
+//     }
 
-    for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
-        if (m_defs[x] != nullptr)
-            continue;
-        if (m_is_bool[x] && n->bvalue(x) == bvalue_kind::b_undef)
-            continue;
-        if (!m_is_bool[x] && n->lower(x) == nullptr && n->upper(x) == nullptr)
-            continue;
-        if (m_is_bool[x]) {
-            temp_units.push_back(lit());
-            lit & l = temp_units.back();
-            l.m_x = x;
-            l.m_bool = true;
-            l.m_open = false;
-            if (n->bvalue(x) == b_false)
-                l.m_lower = true;
-            else if (n->bvalue(x) == b_true)
-                l.m_lower = false;
-            else
-                UNREACHABLE();
-        }
-        else {
-            bound * low = n->lower(x);
-            bound * upp = n->upper(x);
-            if (low != nullptr && upp != nullptr && nm().eq(low->value(), upp->value())) {
-                temp_units.push_back(lit());
-                lit & l = temp_units.back();
-                l.m_x = x;
-                l.m_bool = true;
-                l.m_open = true;
+//     for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
+//         if (m_defs[x] != nullptr)
+//             continue;
+//         if (m_is_bool[x] && n->bvalue(x) == bvalue_kind::b_undef)
+//             continue;
+//         if (!m_is_bool[x] && n->lower(x) == nullptr && n->upper(x) == nullptr)
+//             continue;
+//         if (m_is_bool[x]) {
+//             temp_units.push_back(lit());
+//             lit & l = temp_units.back();
+//             l.m_x = x;
+//             l.m_bool = true;
+//             l.m_open = false;
+//             if (n->bvalue(x) == b_false)
+//                 l.m_lower = true;
+//             else if (n->bvalue(x) == b_true)
+//                 l.m_lower = false;
+//             else
+//                 UNREACHABLE();
+//         }
+//         else {
+//             bound * low = n->lower(x);
+//             bound * upp = n->upper(x);
+//             if (low != nullptr && upp != nullptr && nm().eq(low->value(), upp->value())) {
+//                 temp_units.push_back(lit());
+//                 lit & l = temp_units.back();
+//                 l.m_x = x;
+//                 l.m_bool = true;
+//                 l.m_open = true;
 
-                l.m_int = m_is_int[x];
-                l.m_lower = false;
-                l.m_val = &low->m_val;
-            }
-            else {
-                if (low != nullptr) {
-                    temp_units.push_back(lit());
-                    lit & l = temp_units.back();
-                    l.m_x = x;
-                    l.m_bool = false;
+//                 l.m_int = m_is_int[x];
+//                 l.m_lower = false;
+//                 l.m_val = &low->m_val;
+//             }
+//             else {
+//                 if (low != nullptr) {
+//                     temp_units.push_back(lit());
+//                     lit & l = temp_units.back();
+//                     l.m_x = x;
+//                     l.m_bool = false;
 
-                    l.m_int = m_is_int[x];
-                    l.m_open = low->m_open;
-                    l.m_lower = true;
-                    l.m_val = &low->m_val;
-                }
-                if (upp != nullptr) {
-                    temp_units.push_back(lit());
-                    lit & l = temp_units.back();
-                    l.m_x = x;
-                    l.m_bool = false;
+//                     l.m_int = m_is_int[x];
+//                     l.m_open = low->m_open;
+//                     l.m_lower = true;
+//                     l.m_val = &low->m_val;
+//                 }
+//                 if (upp != nullptr) {
+//                     temp_units.push_back(lit());
+//                     lit & l = temp_units.back();
+//                     l.m_x = x;
+//                     l.m_bool = false;
 
-                    l.m_int = m_is_int[x];
-                    l.m_open = upp->m_open;
-                    l.m_lower = false;
-                    l.m_val = &upp->m_val;
-                }
-            }
-        }
-    }
+//                     l.m_int = m_is_int[x];
+//                     l.m_open = upp->m_open;
+//                     l.m_lower = false;
+//                     l.m_val = &upp->m_val;
+//                 }
+//             }
+//         }
+//     }
     
-    if (temp_units.size() == 0)
-        return;
+//     if (temp_units.size() == 0)
+//         return;
 
-    simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
-}
+//     simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
+// }
 
 template<typename C>
 bool context_t<C>::convert_node_to_task(node * n) {
+    // bool encode_all_variables = true;
+    bool encode_all_variables = false;
     task_info & task = *m_ptask;
     // SASSERT(task.m_node_id == UINT32_MAX);
     task.m_node_id = n->id();
@@ -2727,27 +2729,31 @@ bool context_t<C>::convert_node_to_task(node * n) {
     
     remove_dominated_clauses(temp_clauses, task.m_clauses);
     
-    for (unsigned i = 0, sz = m_unit_clauses.size(); i < sz; ++i) {
-        atom * at = UNTAG(atom*, m_unit_clauses[i]);
-        if (m_defs[at->m_x] == nullptr)
-            continue;
-        temp_units.push_back(std::move(convert_atom_to_lit(at)));
-        // ++task.m_undef_clause_num;
-        // ++task.m_undef_lit_num;
-    }
-
-    for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
-        atom * at = n->up_atoms()[i];
-        if (m_defs[at->m_x] == nullptr)
-            continue;
-        temp_units.push_back(std::move(convert_atom_to_lit(at)));
-        // ++task.m_undef_clause_num;
-        // ++task.m_undef_lit_num;
+    if (!encode_all_variables) {
+        for (unsigned i = 0, sz = m_unit_clauses.size(); i < sz; ++i) {
+            atom * at = UNTAG(atom*, m_unit_clauses[i]);
+            if (m_defs[at->m_x] == nullptr)
+                continue;
+            temp_units.push_back(std::move(convert_atom_to_lit(at)));
+            // ++task.m_undef_clause_num;
+            // ++task.m_undef_lit_num;
+        }
+    
+        for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
+            atom * at = n->up_atoms()[i];
+            if (m_defs[at->m_x] == nullptr)
+                continue;
+            temp_units.push_back(std::move(convert_atom_to_lit(at)));
+            // ++task.m_undef_clause_num;
+            // ++task.m_undef_lit_num;
+        }
     }
 
     for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
-        if (m_defs[x] != nullptr)
-            continue;
+        if (!encode_all_variables) {
+            if (m_defs[x] != nullptr)
+                continue;
+        }
         if (m_is_bool[x] && n->bvalue(x) == bvalue_kind::b_undef)
             continue;
         if (!m_is_bool[x] && n->lower(x) == nullptr && n->upper(x) == nullptr)
@@ -3444,40 +3450,40 @@ void context_t<C>::split_node(node * n) {
     }
 }
 
-//#linxi TBD
-template<typename C>
-void context_t<C>::rebuild_clauses_after_bicp() {
-    for (unsigned i = 0, isz = m_wlist.size(); i < isz; ++i) {
-        m_bicp_wlist.push_back(watch_list());
-        typename watch_list::const_iterator it  = m_wlist[i].begin();
-        typename watch_list::const_iterator end = m_wlist[i].end();
-        //#linxi TBD remove unused variables in wlist
-        for (; it != end; ++it) {
-            watched const & w = *it;
-            if (w.is_clause()) {
-                // do nothing
-            }
-            else {
-                var y = w.get_var();
-                m_bicp_wlist[i].push_back(watched(y));
-            }
-        }
-    }
-    vector<vector<lit>> & clauses = m_ptask->m_clauses;
-    for (unsigned i = 0, isz = clauses.size(); i < isz; ++i) {
-        vector<subpaving::lit> &cla = clauses[i];
-        unsigned jsz = cla.size();
-        for (unsigned j = 0; j < jsz; ++j) {
-            subpaving::lit &l = cla[j];
+// //#linxi TBD
+// template<typename C>
+// void context_t<C>::rebuild_clauses_after_bicp() {
+//     for (unsigned i = 0, isz = m_wlist.size(); i < isz; ++i) {
+//         m_bicp_wlist.push_back(watch_list());
+//         typename watch_list::const_iterator it  = m_wlist[i].begin();
+//         typename watch_list::const_iterator end = m_wlist[i].end();
+//         //#linxi TBD remove unused variables in wlist
+//         for (; it != end; ++it) {
+//             watched const & w = *it;
+//             if (w.is_clause()) {
+//                 // do nothing
+//             }
+//             else {
+//                 var y = w.get_var();
+//                 m_bicp_wlist[i].push_back(watched(y));
+//             }
+//         }
+//     }
+//     vector<vector<lit>> & clauses = m_ptask->m_clauses;
+//     for (unsigned i = 0, isz = clauses.size(); i < isz; ++i) {
+//         vector<subpaving::lit> &cla = clauses[i];
+//         unsigned jsz = cla.size();
+//         for (unsigned j = 0; j < jsz; ++j) {
+//             subpaving::lit &l = cla[j];
 
-        }
-    }
-}
+//         }
+//     }
+// }
 
-template<typename C>
-void context_t<C>::store_root_task_after_bicp() {
-    m_ptask->copy(m_bicp_task);
-}
+// template<typename C>
+// void context_t<C>::store_root_task_after_bicp() {
+//     m_ptask->copy(m_bicp_task);
+// }
 
 template<typename C>
 bool context_t<C>::create_new_task() {
