@@ -164,8 +164,8 @@ if __name__ == '__main__':
         ### COMP-UPDATE ###
         # '--mca btl_tcp_if_include eth0',
         '--mca', 'btl_tcp_if_include',
-        # 'enp1s0f1',
-        'ens6f0',
+        'enp1s0f1',
+        # 'ens6f0',
         '--allow-run-as-root',
         '--use-hwthread-cpus',
         '--bind-to', 'none',

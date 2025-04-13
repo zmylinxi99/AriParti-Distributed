@@ -1079,7 +1079,7 @@ private:
     void collect_task_var_info();
     
     void select_best_var(node * n);
-
+    
     void split_node(node * n);
 
     void write_ss_line_to_coordinator();

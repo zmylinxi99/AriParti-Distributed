@@ -3167,19 +3167,19 @@ typename context_t<C>::node * context_t<C>::select_next_node() {
     // if (m_leaf_heap.empty())
     //     return nullptr;
     // SASSERT(!m_leaf_heap.empty());
-    {
-        const node_info & ni = m_leaf_heap.top();
-        if (ni.m_id % (1 << 5) == 1) {
-            m_temp_stringstream << "[leaf heap top] node-" << ni.m_id
-                << ": depth=" << ni.m_depth << ", undef_clause_num=" <<ni.m_undef_clause_num
-                << ", undef_lit_num=" << ni.m_undef_lit_num;
-            if (ni.m_undef_clause_num > 0) {
-                m_temp_stringstream
-                    << ", avg_clause_length=" << static_cast<double>(ni.m_undef_lit_num) / static_cast<double>(ni.m_undef_clause_num);
-            }
-            write_debug_ss_line_to_coordinator();
-        }
-    }
+    // {
+    //     const node_info & ni = m_leaf_heap.top();
+    //     if (ni.m_id % (1 << 5) == 1) {
+    //         m_temp_stringstream << "[leaf heap top] node-" << ni.m_id
+    //             << ": depth=" << ni.m_depth << ", undef_clause_num=" <<ni.m_undef_clause_num
+    //             << ", undef_lit_num=" << ni.m_undef_lit_num;
+    //         if (ni.m_undef_clause_num > 0) {
+    //             m_temp_stringstream
+    //                 << ", avg_clause_length=" << static_cast<double>(ni.m_undef_lit_num) / static_cast<double>(ni.m_undef_clause_num);
+    //         }
+    //         write_debug_ss_line_to_coordinator();
+    //     }
+    // }
     unsigned nid = m_leaf_heap.top().m_id;
     m_leaf_heap.pop();
     return m_nodes[nid];
@@ -3217,61 +3217,84 @@ void context_t<C>::split_node(node * n) {
     left->split_vars().push_back(id);
     right->split_vars().push_back(id);
 
-    bound * lower = n->lower(id);
-    bound * upper = n->upper(id);
+    bool blower, bopen;
+    bound * lb, * rb;
     numeral & mid = m_tmp1;
 
-    if (m_best_var_info.m_cz) {
-        nm().set(mid, 0);
-        // mid == 0
+    vector<lit> x_lits;
+
+    for (const vector<lit> & cla : m_ptask->m_clauses) {
+        for (const lit & l : cla) {
+            unsigned x = l.m_x;
+            if (m_is_bool[x])
+                continue;
+            if (x == id)
+                x_lits.push_back(l);
+        }
     }
-    else if (lower == nullptr) {
-        // (-oo, upper}
-        SASSERT(upper != nullptr);
-        nm().set(mid, upper->value());
-        nm().floor(mid, mid);
-        nm().sub(mid, m_split_delta, mid);
-        // mid == upper - delta
-    }
-    else if (upper == nullptr) {
-        SASSERT(lower != nullptr);
-        nm().set(mid, lower->value());
-        nm().ceil(mid, mid);
-        nm().add(mid, m_split_delta, mid);
-        // mid == lower + delta
+    unsigned x_lits_sz = x_lits.size();
+    if (x_lits_sz > 0) {
+        std::sort(x_lits.begin(), x_lits.end(), lit_lt(nm()));
+        lit & l = x_lits[x_lits_sz >> 1];
+        blower = static_cast<bool>(l.m_lower);
+        bopen = static_cast<bool>(l.m_open);
+        nm().set(mid, l.m_val);
     }
     else {
-        numeral & two = m_tmp2;
-        SASSERT(!nm().eq(lower->value(), upper->value()));
-        nm().set(two, 2);
-        nm().add(lower->value(), upper->value(), mid);
-        nm().div(mid, two, mid);
-
-        numeral & width = m_tmp3;
-        nm().sub(upper->value(), lower->value(), width);
-        if (nm().gt(width, 10))
-            nm().ceil(mid, mid);
+        bound * lower = n->lower(id);
+        bound * upper = n->upper(id);
         
-        if (!(nm().lt(lower->value(), mid) && nm().lt(mid, upper->value())))
-            throw subpaving::exception();
-        // mid == (lower + upper)/2
+        blower = false;
+        bopen = true;
+        if (m_best_var_info.m_cz) {
+            nm().set(mid, 0);
+            // mid == 0
+        }
+        else if (lower == nullptr) {
+            // (-oo, upper}
+            SASSERT(upper != nullptr);
+            nm().set(mid, upper->value());
+            nm().floor(mid, mid);
+            nm().sub(mid, m_split_delta, mid);
+            // mid == upper - delta
+        }
+        else if (upper == nullptr) {
+            SASSERT(lower != nullptr);
+            nm().set(mid, lower->value());
+            nm().ceil(mid, mid);
+            nm().add(mid, m_split_delta, mid);
+            // mid == lower + delta
+        }
+        else {
+            numeral & two = m_tmp2;
+            SASSERT(!nm().eq(lower->value(), upper->value()));
+            nm().set(two, 2);
+            nm().add(lower->value(), upper->value(), mid);
+            nm().div(mid, two, mid);
+
+            numeral & width = m_tmp3;
+            nm().sub(upper->value(), lower->value(), width);
+            if (nm().gt(width, 10))
+                nm().ceil(mid, mid);
+            
+            if (!(nm().lt(lower->value(), mid) && nm().lt(mid, upper->value())))
+                throw subpaving::exception();
+            // mid == (lower + upper)/2
+        }
     }
 
     numeral & nmid = m_tmp2;
-    bool blower, bopen;
-
-    blower = false;
-    bopen = true;
-    normalize_bound(id, mid, nmid, blower, bopen);
-    bound * lb = mk_bound(id, nmid, blower, bopen, left, justification());
     
-    blower = true;
-    bopen = false;
     normalize_bound(id, mid, nmid, blower, bopen);
-    bound * rb = mk_bound(id, nmid, blower, bopen, right, justification());
+    lb = mk_bound(id, nmid, blower, bopen, left, justification());
+    
+    blower = !blower;
+    bopen = !bopen;
+    normalize_bound(id, mid, nmid, blower, bopen);
+    rb = mk_bound(id, nmid, blower, bopen, right, justification());
 
     m_queue.push_back(lb);
-    add_unpropagated_bounds(n);
+    // add_unpropagated_bounds(n);
     propagate(left);
     if (left->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << left->id() << " is inconsistent.\n";);
@@ -3290,7 +3313,7 @@ void context_t<C>::split_node(node * n) {
     }
 
     m_queue.push_back(rb);
-    add_unpropagated_bounds(n);
+    // add_unpropagated_bounds(n);
     propagate(right);
     if (right->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << right->id() << " is inconsistent.\n";);
