@@ -986,6 +986,8 @@ private:
     */
     void add_recent_bounds(node * n);
 
+    // void add_unpropagated_bounds(node * n);
+
     /**
        \brief Propagate new bounds at node n using get_monomial(x)
        \pre is_monomial(x)

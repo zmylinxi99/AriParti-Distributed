@@ -1894,6 +1894,21 @@ void context_t<C>::add_recent_bounds(node * n) {
     }
 }
 
+// template<typename C>
+// void context_t<C>::add_unpropagated_bounds(node * n) {
+//     bound * lpb   = n->last_processed_bounds();
+//     bound * b     = n->trail_stack();
+//     unsigned cnt = 0;
+//     unsigned max_lpb;
+//     while (b != lpb) {
+//         if (most_recent(b, n)) {
+//             b->set_timestamp(m_timestamp);
+//             m_queue.push_back(b);
+//         }
+//         b = b->prev();
+//     }
+// }
+
 template<typename C>
 void context_t<C>::propagate_def(var x, node * n) {
     SASSERT(is_definition(x));
@@ -3256,6 +3271,7 @@ void context_t<C>::split_node(node * n) {
     bound * rb = mk_bound(id, nmid, blower, bopen, right, justification());
 
     m_queue.push_back(lb);
+    add_unpropagated_bounds(n);
     propagate(left);
     if (left->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << left->id() << " is inconsistent.\n";);
@@ -3274,6 +3290,7 @@ void context_t<C>::split_node(node * n) {
     }
 
     m_queue.push_back(rb);
+    add_unpropagated_bounds(n);
     propagate(right);
     if (right->inconsistent()) {
         TRACE("subpaving_main", tout << "node #" << right->id() << " is inconsistent.\n";);
