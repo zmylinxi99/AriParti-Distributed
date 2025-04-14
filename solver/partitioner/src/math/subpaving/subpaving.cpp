@@ -24,7 +24,8 @@ Revision History:
 --*/
 #include "math/subpaving/subpaving.h"
 #include "math/subpaving/subpaving_types.h"
-#include "math/subpaving/subpaving_mpq.h"
+#include "math/subpaving/subpaving_t.h"
+#include "math/subpaving/subpaving_t_def.h"
 
 namespace subpaving {
 
@@ -53,12 +54,12 @@ namespace subpaving {
         void display_bounds(std::ostream & out) const override { m_ctx.display_bounds(out); }
     };
 
-    class context_mpq_wrapper : public context_wrapper<context_mpq> {
+    class context_mpq_wrapper : public context_wrapper<context_t> {
         scoped_mpq        m_c;
         scoped_mpq_vector m_as;
     public:
         context_mpq_wrapper(reslimit& lim, unsynch_mpq_manager & m, params_ref const & p, small_object_allocator * a):
-            context_wrapper<context_mpq>(lim, m, p, a), 
+            context_wrapper<context_t>(lim, m, p, a), 
             m_c(m), 
             m_as(m) 
         {}

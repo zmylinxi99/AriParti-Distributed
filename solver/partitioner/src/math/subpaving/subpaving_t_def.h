@@ -36,8 +36,7 @@ namespace subpaving {
 /**
    \brief Auxiliary static method used to display a bound specified by (x, k, lower, open).
 */
-template<typename C>
-void context_t<C>::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc, var x, numeral & k, bool lower, bool open) {
+void context_t::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc, var x, numeral & k, bool lower, bool open) {
     if (lower) {
         out << nm.to_rational_string(k) << " <";
         if (!open)
@@ -54,18 +53,15 @@ void context_t<C>::display(std::ostream & out, numeral_manager & nm, display_var
     }
 }
 
-template<typename C>
-void context_t<C>::atom::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
-    context_t<C>::display(out, nm, proc, m_x, m_val, is_lower(), is_open());
+void context_t::atom::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
+    context_t::display(out, nm, proc, m_x, m_val, is_lower(), is_open());
 }
 
-template<typename C>
-void context_t<C>::bound::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
-    context_t<C>::display(out, nm, proc, m_x, m_val, is_lower(), is_open());
+void context_t::bound::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
+    context_t::display(out, nm, proc, m_x, m_val, is_lower(), is_open());
 }
 
-template<typename C>
-void context_t<C>::clause::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
+void context_t::clause::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
     for (unsigned i = 0; i < size(); i++) {
         if (i > 0)
             out << " or ";
@@ -73,8 +69,7 @@ void context_t<C>::clause::display(std::ostream & out, numeral_manager & nm, dis
     }
 }
 
-template<typename C>
-context_t<C>::node::node(context_t & s, unsigned id, bool_vector &is_bool):
+context_t::node::node(context_t & s, unsigned id, bool_vector &is_bool):
     m_bm(s.bm()),
     m_bvm(s.bvm())
 {
@@ -100,8 +95,7 @@ context_t<C>::node::node(context_t & s, unsigned id, bool_vector &is_bool):
     }
 }
 
-template<typename C>
-context_t<C>::node::node(node * parent, unsigned id):
+context_t::node::node(node * parent, unsigned id):
     m_bm(parent->m_bm),
     m_bvm(parent->m_bvm)
 {
@@ -125,8 +119,7 @@ context_t<C>::node::node(node * parent, unsigned id):
 /**
    \brief Add a new bound b at this node.
 */
-template<typename C>
-void context_t<C>::node::push(bound * b) {
+void context_t::node::push(bound * b) {
     SASSERT(b->prev() == m_trail);
     m_trail = b;
     var x = b->x();
@@ -156,8 +149,7 @@ void context_t<C>::node::push(bound * b) {
 /**
     \brief Return the most recent variable that was used for splitting on node n.
 */
-template<typename C>
-var context_t<C>::splitting_var(node * n) const {
+var context_t::splitting_var(node * n) const {
     if (n == m_root)
         return null_var;
     bound * b = n->trail_stack();
@@ -170,8 +162,7 @@ var context_t<C>::splitting_var(node * n) const {
     return null_var;
 }
 
-template<typename C>
-context_t<C>::monomial::monomial(unsigned sz, power const * pws):
+context_t::monomial::monomial(unsigned sz, power const * pws):
     definition(constraint::MONOMIAL),
     m_size(sz) {
     std::uninitialized_copy(pws, pws + sz, m_powers);
@@ -183,8 +174,7 @@ context_t<C>::monomial::monomial(unsigned sz, power const * pws):
             }});
 }
 
-template<typename C>
-void context_t<C>::monomial::display(std::ostream & out, display_var_proc const & proc, bool use_star) const {
+void context_t::monomial::display(std::ostream & out, display_var_proc const & proc, bool use_star) const {
     SASSERT(m_size > 0);
     for (unsigned i = 0; i < m_size; i++) {
         if (i > 0) {
@@ -199,8 +189,7 @@ void context_t<C>::monomial::display(std::ostream & out, display_var_proc const 
     }
 }
 
-template<typename C>
-void context_t<C>::polynomial::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc, bool use_star) const {
+void context_t::polynomial::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc, bool use_star) const {
     bool first = true;
     for (unsigned i = 0; i < m_size; i++) {
         if (first)
@@ -218,8 +207,7 @@ void context_t<C>::polynomial::display(std::ostream & out, numeral_manager & nm,
     }
 }
 
-template<typename C>
-context_t<C>::context_t(reslimit& lim, C const & c, params_ref const & p, small_object_allocator * a):
+context_t::context_t(reslimit& lim, config_mpq const & c, params_ref const & p, small_object_allocator * a):
     m_limit(lim),
     m_c(c),
     m_own_allocator(a == nullptr),
@@ -251,8 +239,7 @@ context_t<C>::context_t(reslimit& lim, C const & c, params_ref const & p, small_
     // m_ptr_clauses = &m_clauses;
 }
 
-template<typename C>
-context_t<C>::~context_t() {
+context_t::~context_t() {
     nm().del(m_epsilon);
     nm().del(m_max_bound);
     nm().del(m_split_delta);
@@ -277,22 +264,19 @@ context_t<C>::~context_t() {
         dealloc(m_allocator);
 }
 
-template<typename C>
-void context_t<C>::checkpoint() {
+void context_t::checkpoint() {
     if (!m_limit.inc())
         throw default_exception(Z3_CANCELED_MSG);
     if (memory::get_allocation_size() > m_max_memory)
         throw default_exception(Z3_MAX_MEMORY_MSG);
 }
 
-template<typename C>
-void context_t<C>::del(interval & a) {
+void context_t::del(interval & a) {
     nm().del(a.m_l_val);
     nm().del(a.m_u_val);
 }
 
-template<typename C>
-void context_t<C>::updt_params(params_ref const & p) {
+void context_t::updt_params(params_ref const & p) {
     unsigned epsilon = p.get_uint("epsilon", 20);
     if (epsilon != 0) {
         nm().set(m_epsilon, static_cast<int>(epsilon));
@@ -333,8 +317,7 @@ void context_t<C>::updt_params(params_ref const & p) {
     nm().inv(m_nth_root_prec);
 }
 
-template<typename C>
-void context_t<C>::collect_param_descrs(param_descrs & d) {
+void context_t::collect_param_descrs(param_descrs & d) {
     d.insert("max_nodes", CPK_UINT, "(default: 8192) maximum number of nodes in the subpaving tree.");
     d.insert("max_depth", CPK_UINT, "(default: 128) maximum depth of the subpaving tree.");
     d.insert("epsilon", CPK_UINT, "(default: 20) value k s.t. a new lower (upper) bound for x is propagated only new-lower(x) > lower(k) + 1/k * max(min(upper(x) - lower(x), |lower|), 1) (new-upper(x) < upper(x) - 1/k * max(min(upper(x) - lower(x), |lower|), 1)). If k = 0, then this restriction is ignored.");
@@ -342,8 +325,7 @@ void context_t<C>::collect_param_descrs(param_descrs & d) {
     d.insert("nth_root_precision", CPK_UINT, "(default 8192) value k s.t. 1/k is the precision for computing the nth root in the subpaving module.");
 }
 
-template<typename C>
-void context_t<C>::display_params(std::ostream & out) const {
+void context_t::display_params(std::ostream & out) const {
     out << "max_nodes  " << m_max_nodes << "\n";
     out << "max_depth  " << m_max_depth << "\n";
     out << "epsilon    " << nm().to_rational_string(m_epsilon) << "\n";
@@ -351,8 +333,7 @@ void context_t<C>::display_params(std::ostream & out) const {
     out << "max_memory " << m_max_memory << "\n";
 }
 
-template<typename C>
-typename context_t<C>::bound * context_t<C>::mk_bvar_bound(var x, bool neg, node * n, justification jst) {
+typename context_t::bound * context_t::mk_bvar_bound(var x, bool neg, node * n, justification jst) {
     SASSERT(!inconsistent(n));
     ++m_num_mk_bounds;
     void * mem = allocator().allocate(sizeof(bound));
@@ -375,8 +356,7 @@ typename context_t<C>::bound * context_t<C>::mk_bvar_bound(var x, bool neg, node
     return r;
 }
 
-template<typename C>
-void context_t<C>::adjust_integer_bound(numeral const &val, numeral &result, bool lower, bool &open) {
+void context_t::adjust_integer_bound(numeral const &val, numeral &result, bool lower, bool &open) {
     // adjust integer bound
     if (!nm().is_int(val)) {
         open = false; // performing ceil/floor
@@ -391,18 +371,17 @@ void context_t<C>::adjust_integer_bound(numeral const &val, numeral &result, boo
     if (open) {
         open = false;
         if (lower)  {
-            C::round_to_minus_inf(nm());
+            config_mpq::round_to_minus_inf(nm());
             nm().inc(result);
         }
         else {
-            C::round_to_plus_inf(nm());
+            config_mpq::round_to_plus_inf(nm());
             nm().dec(result);
         }
     }
 }
 
-template<typename C>
-void context_t<C>::adjust_relaxed_bound(numeral const &val, numeral &result, bool lower, bool &open) {
+void context_t::adjust_relaxed_bound(numeral const &val, numeral &result, bool lower, bool &open) {
     // adjust integer bound
     if (!nm().is_int(val)) {
         open = true; // performing ceil/floor
@@ -415,8 +394,7 @@ void context_t<C>::adjust_relaxed_bound(numeral const &val, numeral &result, boo
         nm().set(result, val);
 }
 
-template<typename C>
-typename context_t<C>::bound * context_t<C>::mk_bound(var x, numeral const & val, bool lower, bool open, node * n, justification jst) {
+typename context_t::bound * context_t::mk_bound(var x, numeral const & val, bool lower, bool open, node * n, justification jst) {
     SASSERT(!inconsistent(n));
     m_num_mk_bounds++;
     void * mem = allocator().allocate(sizeof(bound));
@@ -440,8 +418,7 @@ typename context_t<C>::bound * context_t<C>::mk_bound(var x, numeral const & val
         throw subpaving::exception(); // subpaving failed.
     return r;
 }
-template<typename C>
-bool context_t<C>::improve_bvar_bound(var x, bool neg, node * n) {
+bool context_t::improve_bvar_bound(var x, bool neg, node * n) {
     bvalue_kind bk = n->bvalue(x);
     bvalue_kind nbk = neg ? b_false : b_true;
     if (bk == bvalue_kind::b_undef)
@@ -451,8 +428,7 @@ bool context_t<C>::improve_bvar_bound(var x, bool neg, node * n) {
     return false;
 }
 
-template<typename C>
-void context_t<C>::propagate_bvar_bound(var x, bool neg, node * n, justification jst) {
+void context_t::propagate_bvar_bound(var x, bool neg, node * n, justification jst) {
     if (!improve_bvar_bound(x, neg, n))
         return;
     TRACE("linxi_subpaving", 
@@ -462,8 +438,7 @@ void context_t<C>::propagate_bvar_bound(var x, bool neg, node * n, justification
     m_queue.push_back(b);
 }
 
-template<typename C>
-void context_t<C>::propagate_bound(var x, numeral const & val, bool lower, bool open, node * n, justification jst) {
+void context_t::propagate_bound(var x, numeral const & val, bool lower, bool open, node * n, justification jst) {
     numeral & nval = m_tmp3;
     normalize_bound(x, val, nval, lower, open);
     if (!improve_bound(x, nval, lower, open, n))
@@ -480,33 +455,28 @@ void context_t<C>::propagate_bound(var x, numeral const & val, bool lower, bool 
     SASSERT(lower  || nm().le(n->upper(x)->value(), val));
 }
 
-template<typename C>
-void context_t<C>::del_bound(bound * b) {
+void context_t::del_bound(bound * b) {
     nm().del(b->m_val);
     b->~bound();
     allocator().deallocate(sizeof(bound), b);
 }
 
-template<typename C>
-void context_t<C>::display(std::ostream & out, var x) const {
+void context_t::display(std::ostream & out, var x) const {
     if (x == null_var)
         out << "[null]";
     else
         (*m_display_proc)(out, x);
 }
 
-template<typename C>
-void context_t<C>::display(std::ostream & out, bound * b) const {
+void context_t::display(std::ostream & out, bound * b) const {
     b->display(out, nm(), *m_display_proc);
 }
 
-template<typename C>
-void context_t<C>::display(std::ostream & out, atom * a) const {
+void context_t::display(std::ostream & out, atom * a) const {
     a->display(out, nm(), *m_display_proc);
 }
 
-template<typename C>
-void context_t<C>::display_definition(std::ostream & out, definition const * d, bool use_star) const {
+void context_t::display_definition(std::ostream & out, definition const * d, bool use_star) const {
     switch (d->get_kind()) {
     case constraint::MONOMIAL:
         static_cast<monomial const *>(d)->display(out, *m_display_proc, use_star);
@@ -519,16 +489,14 @@ void context_t<C>::display_definition(std::ostream & out, definition const * d, 
     };
 }
 
-template<typename C>
-void context_t<C>::display(std::ostream & out, constraint * c, bool use_star) const {
+void context_t::display(std::ostream & out, constraint * c, bool use_star) const {
     if (c->get_kind() == constraint::CLAUSE)
         static_cast<clause*>(c)->display(out, nm(), *m_display_proc);
     else
         display_definition(out, static_cast<definition*>(c), use_star);
 }
 
-template<typename C>
-void context_t<C>::display_bounds(std::ostream & out, node * n) const {
+void context_t::display_bounds(std::ostream & out, node * n) const {
     unsigned num = num_vars();
     for (unsigned x = 0; x < num; x++) {
         bound * l = n->lower(x);
@@ -548,8 +516,7 @@ void context_t<C>::display_bounds(std::ostream & out, node * n) const {
 /**
    \brief Return true if all variables in m are integer.
 */
-template<typename C>
-bool context_t<C>::is_int(monomial const * m) const {
+bool context_t::is_int(monomial const * m) const {
     for (unsigned i = 0; i < m->size(); i++) {
         if (is_int(m->x(i)))
             return true;
@@ -560,8 +527,7 @@ bool context_t<C>::is_int(monomial const * m) const {
 /**
    \brief Return true if all variables in p are integer, and all coefficients in p are integer.
 */
-template<typename C>
-bool context_t<C>::is_int(polynomial const * p) const {
+bool context_t::is_int(polynomial const * p) const {
     for (unsigned i = 0; i < p->size(); i++) {
         if (!is_int(p->x(i)) || !nm().is_int(p->a(i))) {
             TRACE("subpaving_is_int", tout << "polynomial is not integer due to monomial at i: " << i << "\n"; tout.flush();
@@ -572,8 +538,7 @@ bool context_t<C>::is_int(polynomial const * p) const {
     return true;
 }
 
-template<typename C>
-var context_t<C>::mk_var(bool is_int) {
+var context_t::mk_var(bool is_int) {
     var r = static_cast<var>(m_is_int.size());
     m_is_int.push_back(is_int);
     m_is_bool.push_back(false);
@@ -582,8 +547,7 @@ var context_t<C>::mk_var(bool is_int) {
     return r;
 }
 
-template<typename C>
-var context_t<C>::mk_bvar() {
+var context_t::mk_bvar() {
     var r = static_cast<var>(m_is_int.size());
     m_is_int.push_back(false);
     m_is_bool.push_back(true);
@@ -592,15 +556,13 @@ var context_t<C>::mk_bvar() {
     return r;
 }
 
-template<typename C>
-void context_t<C>::del_monomial(monomial * m) {
+void context_t::del_monomial(monomial * m) {
     unsigned mem_sz = monomial::get_obj_size(m->size());
     m->~monomial();
     allocator().deallocate(mem_sz, m);
 }
 
-template<typename C>
-var context_t<C>::mk_monomial(unsigned sz, power const * pws) {
+var context_t::mk_monomial(unsigned sz, power const * pws) {
     SASSERT(sz > 0);
     unsigned mem_sz  = monomial::get_obj_size(sz);
     void * mem       = allocator().allocate(mem_sz);
@@ -614,8 +576,7 @@ var context_t<C>::mk_monomial(unsigned sz, power const * pws) {
     return new_var;
 }
 
-template<typename C>
-void context_t<C>::del_sum(polynomial * p) {
+void context_t::del_sum(polynomial * p) {
     unsigned sz = p->size();
     unsigned mem_sz = polynomial::get_obj_size(sz);
     for (unsigned i = 0; i < sz; i++) {
@@ -625,8 +586,7 @@ void context_t<C>::del_sum(polynomial * p) {
     allocator().deallocate(mem_sz, p);
 }
 
-template<typename C>
-var context_t<C>::mk_sum(unsigned sz, numeral const * as, var const * xs) {
+var context_t::mk_sum(unsigned sz, numeral const * as, var const * xs) {
     m_num_buffer.reserve(num_vars());
     for (unsigned i = 0; i < sz; i++) {
         SASSERT(xs[i] < num_vars());
@@ -659,8 +619,7 @@ var context_t<C>::mk_sum(unsigned sz, numeral const * as, var const * xs) {
 
 //#linxi TBD atom hash cache
 
-template<typename C>
-typename context_t<C>::atom * context_t<C>::mk_bool_atom(var x, bool neg) {
+typename context_t::atom * context_t::mk_bool_atom(var x, bool neg) {
     void * mem = allocator().allocate(sizeof(atom));
     atom * r   = new (mem) atom();
     r->m_ref_count = 0;
@@ -672,8 +631,7 @@ typename context_t<C>::atom * context_t<C>::mk_bool_atom(var x, bool neg) {
     return r;
 }
 
-template<typename C>
-typename context_t<C>::atom * context_t<C>::mk_eq_atom(var x, numeral const & k, bool neg) {
+typename context_t::atom * context_t::mk_eq_atom(var x, numeral const & k, bool neg) {
     void * mem = allocator().allocate(sizeof(atom));
     atom * r   = new (mem) atom();
     r->m_ref_count = 0;
@@ -686,8 +644,7 @@ typename context_t<C>::atom * context_t<C>::mk_eq_atom(var x, numeral const & k,
     return r;
 }
 
-template<typename C>
-typename context_t<C>::atom * context_t<C>::mk_ineq_atom(var x, numeral const & k, bool lower, bool open) {
+typename context_t::atom * context_t::mk_ineq_atom(var x, numeral const & k, bool lower, bool open) {
     void * mem = allocator().allocate(sizeof(atom));
     atom * r   = new (mem) atom();
     r->m_ref_count = 0;
@@ -700,15 +657,13 @@ typename context_t<C>::atom * context_t<C>::mk_ineq_atom(var x, numeral const & 
     return r;
 }
 
-template<typename C>
-void context_t<C>::inc_ref(atom * a) {
+void context_t::inc_ref(atom * a) {
     TRACE("subpaving_ref_count", tout << "inc-ref: " << a << " " << a->m_ref_count << "\n";);
     if (a)
         a->m_ref_count++;
 }
 
-template<typename C>
-void context_t<C>::dec_ref(atom * a) {
+void context_t::dec_ref(atom * a) {
     if (a) {
         TRACE("subpaving_ref_count",
               tout << "dec-ref: " << a << " " << a->m_ref_count << "\n";
@@ -724,8 +679,7 @@ void context_t<C>::dec_ref(atom * a) {
     }
 }
 
-template<typename C>
-void context_t<C>::add_clause_core(unsigned sz, atom * const * atoms, bool lemma, bool watch) {
+void context_t::add_clause_core(unsigned sz, atom * const * atoms, bool lemma, bool watch) {
     SASSERT(lemma || watch);
     SASSERT(sz > 0);
     if (sz == 1) {
@@ -761,8 +715,7 @@ void context_t<C>::add_clause_core(unsigned sz, atom * const * atoms, bool lemma
     TRACE("subpaving_clause", tout << "new clause:\n"; display(tout, c); tout << "\n";);
 }
 
-template<typename C>
-void context_t<C>::del_clause(clause * c) {
+void context_t::del_clause(clause * c) {
     SASSERT(c->m_num_jst == 0); // We cannot delete a clause that is being used to justify some bound
     bool watch  = c->watched();
     var prev_x  = null_var;
@@ -781,8 +734,7 @@ void context_t<C>::del_clause(clause * c) {
     allocator().deallocate(mem_sz, c);
 }
 
-template<typename C>
-void context_t<C>::add_unit_clause(atom * a, bool axiom) {
+void context_t::add_unit_clause(atom * a, bool axiom) {
     TRACE("subpaving", a->display(tout, nm(), *m_display_proc); tout << "\n";);
     inc_ref(a);
     // if (m_root_bicp_done) {
@@ -794,8 +746,7 @@ void context_t<C>::add_unit_clause(atom * a, bool axiom) {
     m_unit_clauses.push_back(TAG(atom*, a, axiom));
 }
 
-template<typename C>
-typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
+typename context_t::node * context_t::mk_node(node * parent) {
     void * mem = allocator().allocate(sizeof(node));
     node * r;
     if (parent == nullptr) {
@@ -849,8 +800,7 @@ typename context_t<C>::node * context_t<C>::mk_node(node * parent) {
     return r;
 }
 
-template<typename C>
-void context_t<C>::del_node(node * n) {
+void context_t::del_node(node * n) {
     SASSERT(n->first_child() == 0);
 
     SASSERT(m_num_nodes > 0);
@@ -894,8 +844,7 @@ void context_t<C>::del_node(node * n) {
     allocator().deallocate(sizeof(node), n);
 }
 
-template<typename C>
-void context_t<C>::del_nodes() {
+void context_t::del_nodes() {
     ptr_buffer<node> todo;
     if (m_root == nullptr)
         return;
@@ -916,8 +865,7 @@ void context_t<C>::del_nodes() {
     }
 }
 
-template<typename C>
-void context_t<C>::push_front(node * n) {
+void context_t::push_front(node * n) {
     SASSERT(n->first_child() == 0);
     SASSERT(n->next() == 0);
     SASSERT(n->prev() == 0);
@@ -933,8 +881,7 @@ void context_t<C>::push_front(node * n) {
     m_leaf_head = n;
 }
 
-template<typename C>
-void context_t<C>::push_back(node * n) {
+void context_t::push_back(node * n) {
     SASSERT(n->first_child() == 0);
     SASSERT(n->next() == 0);
     SASSERT(n->prev() == 0);
@@ -950,8 +897,7 @@ void context_t<C>::push_back(node * n) {
     m_leaf_tail = n;
 }
 
-template<typename C>
-void context_t<C>::reset_leaf_dlist() {
+void context_t::reset_leaf_dlist() {
     // Remove all nodes from the lead doubly linked list
     node * n = m_leaf_head;
     while (n != nullptr) {
@@ -964,8 +910,7 @@ void context_t<C>::reset_leaf_dlist() {
     m_leaf_tail = nullptr;
 }
 
-template<typename C>
-void context_t<C>::rebuild_leaf_dlist(node * n) {
+void context_t::rebuild_leaf_dlist(node * n) {
     reset_leaf_dlist();
     // Reinsert all leaves in the leaf dlist.
     ptr_buffer<node, 1024> todo;
@@ -989,8 +934,7 @@ void context_t<C>::rebuild_leaf_dlist(node * n) {
     }
 }
 
-template<typename C>
-void context_t<C>::remove_from_leaf_dlist(node * n) {
+void context_t::remove_from_leaf_dlist(node * n) {
     node * prev = n->prev();
     node * next = n->next();
     SASSERT(prev == 0 || prev != next);
@@ -1016,8 +960,7 @@ void context_t<C>::remove_from_leaf_dlist(node * n) {
     SASSERT(n->prev() == 0 && n->next() == 0);
 }
 
-template<typename C>
-void context_t<C>::collect_leaves(ptr_vector<node> & leaves) const {
+void context_t::collect_leaves(ptr_vector<node> & leaves) const {
     // Copy all leaves to the given vector.
     ptr_buffer<node, 1024> todo;
     if (m_root != nullptr)
@@ -1040,16 +983,14 @@ void context_t<C>::collect_leaves(ptr_vector<node> & leaves) const {
     }
 }
 
-template<typename C>
-void context_t<C>::del_unit_clauses() {
+void context_t::del_unit_clauses() {
     unsigned sz = m_unit_clauses.size();
     for (unsigned i = 0; i < sz; i++)
         dec_ref(UNTAG(atom*, m_unit_clauses[i]));
     m_unit_clauses.reset();
 }
 
-template<typename C>
-void context_t<C>::del_clauses(ptr_vector<clause> & cs) {
+void context_t::del_clauses(ptr_vector<clause> & cs) {
     unsigned sz = cs.size();
     for (unsigned i = 0; i < sz; i++) {
         del_clause(cs[i]);
@@ -1057,14 +998,12 @@ void context_t<C>::del_clauses(ptr_vector<clause> & cs) {
     cs.reset();
 }
 
-template<typename C>
-void context_t<C>::del_clauses() {
+void context_t::del_clauses() {
     del_clauses(m_clauses);
     del_clauses(m_lemmas);
 }
 
-template<typename C>
-void context_t<C>::del_definitions() {
+void context_t::del_definitions() {
     unsigned sz = num_vars();
     for (unsigned i = 0; i < sz; i++) {
         definition * d = m_defs[i];
@@ -1084,8 +1023,7 @@ void context_t<C>::del_definitions() {
     }
 }
 
-template<typename C>
-void context_t<C>::display_constraints(std::ostream & out, bool use_star) const {
+void context_t::display_constraints(std::ostream & out, bool use_star) const {
     // display definitions
     out << "definitions:\n";
     for (unsigned i = 0; i < num_vars(); i++) {
@@ -1115,23 +1053,20 @@ void context_t<C>::display_constraints(std::ostream & out, bool use_star) const 
 //
 // -----------------------------------
 
-template<typename C>
-void context_t<C>::set_conflict(var x, node * n) {
+void context_t::set_conflict(var x, node * n) {
     m_num_conflicts++;
     n->set_conflict(x);
     // remove_from_leaf_dlist(n);
 }
 
-template<typename C>
-bool context_t<C>::may_propagate(bound * b, constraint * c, node * n) {
+bool context_t::may_propagate(bound * b, constraint * c, node * n) {
     SASSERT(b != 0 && c != 0);
     TRACE("may_propagate_bug", display(tout, b); tout << " | "; display(tout, c); tout << "\nresult: " << (b->timestamp() > c->timestamp()) << ", " << b->timestamp() << ", " << c->timestamp() << "\n";);
     return b->timestamp() >= c->timestamp();
 }
 
 // Normalization for bounds (for integer and too large denominator)
-template<typename C>
-void context_t<C>::normalize_bound(var x, const numeral &val, numeral &result, bool lower, bool & open) {
+void context_t::normalize_bound(var x, const numeral &val, numeral &result, bool lower, bool & open) {
     TRACE("linxi_subpaving",
         tout << "before normalize\n"
              << "x: " << x << ", val: ";
@@ -1169,13 +1104,11 @@ void context_t<C>::normalize_bound(var x, const numeral &val, numeral &result, b
     );
 }
 
-template<typename C>
-void context_t<C>::normalize_bound(var x, numeral & val, bool lower, bool & open) {
+void context_t::normalize_bound(var x, numeral & val, bool lower, bool & open) {
     normalize_bound(x, val, val, lower, open);
 }
 
-template<typename C>
-bool context_t<C>::relevant_new_bound(var x, numeral const & k, bool lower, bool open, node * n) {
+bool context_t::relevant_new_bound(var x, numeral const & k, bool lower, bool open, node * n) {
     try {
         bound * curr_lower = n->lower(x);
         bound * curr_upper = n->upper(x);
@@ -1284,15 +1217,14 @@ bool context_t<C>::relevant_new_bound(var x, numeral const & k, bool lower, bool
         TRACE("subpaving_relevant_bound", tout << "new bound is relevant\n";);
         return true;
     }
-    catch (const typename C::exception &) {
+    catch (const typename config_mpq::exception &) {
         // arithmetic module failed.
         set_arith_failed();
         return false;
     }
 }
 
-template<typename C>
-bool context_t<C>::improve_bound(var x, numeral const & k, bool lower, bool open, node * n) {
+bool context_t::improve_bound(var x, numeral const & k, bool lower, bool open, node * n) {
     bound * curr_lower = n->lower(x);
     bound * curr_upper = n->upper(x);
     SASSERT(curr_lower == 0 || curr_lower->x() == x);
@@ -1333,29 +1265,25 @@ bool context_t<C>::improve_bound(var x, numeral const & k, bool lower, bool open
     return true;
 }
 
-template<typename C>
-bool context_t<C>::is_zero(var x, node * n) const {
+bool context_t::is_zero(var x, node * n) const {
     // Return true if lower(x) == upper(x) == 0 at n
     bound * l = n->lower(x);
     bound * u = n->upper(x);
     return l != nullptr && u != nullptr && nm().is_zero(l->value()) && nm().is_zero(u->value()) && !l->is_open() && !u->is_open();
 }
 
-template<typename C>
-bool context_t<C>::is_upper_zero(var x, node * n) const {
+bool context_t::is_upper_zero(var x, node * n) const {
     // Return true if upper(x) is zero at node n
     bound * u = n->upper(x);
     return u != nullptr && nm().is_zero(u->value()) && !u->is_open();
 }
 
-template<typename C>
-bool context_t<C>::conflicting_bvar_bounds(var x, node * n) const {
+bool context_t::conflicting_bvar_bounds(var x, node * n) const {
     // Return true if bvalue[x] == b_conflict
     return n->bvalue(x) == bvalue_kind::b_conflict;
 }
 
-template<typename C>
-bool context_t<C>::conflicting_bounds(var x, node * n) const {
+bool context_t::conflicting_bounds(var x, node * n) const {
     // Return true if upper(x) < lower(x) at node n
     bound * l = n->lower(x);
     bound * u = n->upper(x);
@@ -1367,8 +1295,7 @@ bool context_t<C>::conflicting_bounds(var x, node * n) const {
 
    The result may be l_true (True), l_false (False), or l_undef(Unknown).
 */
-template<typename C>
-lbool context_t<C>::value(atom * t, node * n) {
+lbool context_t::value(atom * t, node * n) {
     var x = t->x();
     bvalue_kind bk = n->bvalue(x);
     if (t->m_bool) {
@@ -1450,8 +1377,7 @@ lbool context_t<C>::value(atom * t, node * n) {
 
    The result may be l_true (True), l_false (False), or l_undef(Unknown).
 */
-template<typename C>
-lbool context_t<C>::value(lit & tl, node * n) {
+lbool context_t::value(lit & tl, node * n) {
     var x = tl.m_x;
     bvalue_kind bk = n->bvalue(x);
     if (tl.m_bool) {
@@ -1528,8 +1454,7 @@ lbool context_t<C>::value(lit & tl, node * n) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate_clause(clause * c, node * n) {
+void context_t::propagate_clause(clause * c, node * n) {
     TRACE("propagate_clause", tout << "propagate using:\n"; display(tout, c); tout << "\n";);
     m_num_visited++;
     c->set_visited(m_timestamp);
@@ -1581,8 +1506,7 @@ void context_t<C>::propagate_clause(clause * c, node * n) {
     c->set_visited(m_timestamp);
 }
 
-template<typename C>
-void context_t<C>::propagate_polynomial(var x, node * n, var y) {
+void context_t::propagate_polynomial(var x, node * n, var y) {
     SASSERT(y != null_var);
     SASSERT(is_polynomial(x));
     TRACE("linxi_subpaving",
@@ -1647,8 +1571,7 @@ void context_t<C>::propagate_polynomial(var x, node * n, var y) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate_polynomial(var x, node * n) {
+void context_t::propagate_polynomial(var x, node * n) {
     TRACE("propagate_polynomial", tout << "propagate_polynomial: "; display(tout, x); tout << "\n";);
     TRACE("propagate_polynomial_detail", display_bounds(tout, n););
     SASSERT(is_polynomial(x));
@@ -1681,8 +1604,7 @@ void context_t<C>::propagate_polynomial(var x, node * n) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate_monomial(var x, node * n) {
+void context_t::propagate_monomial(var x, node * n) {
     TRACE("propagate_monomial", tout << "propagate_monomial: "; display(tout, x); tout << "\n";);
     SASSERT(is_monomial(x));
     SASSERT(!inconsistent(n));
@@ -1759,8 +1681,7 @@ void context_t<C>::propagate_monomial(var x, node * n) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate_monomial_upward(var x, node * n) {
+void context_t::propagate_monomial_upward(var x, node * n) {
     SASSERT(is_monomial(x));
     monomial * m = get_monomial(x);
     unsigned sz  = m->size();
@@ -1794,8 +1715,7 @@ void context_t<C>::propagate_monomial_upward(var x, node * n) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate_monomial_downward(var x, node * n, unsigned j) {
+void context_t::propagate_monomial_downward(var x, node * n, unsigned j) {
     TRACE("propagate_monomial", tout << "propagate_monomial_downward: "; display(tout, x); tout << ", j: " << j << "\n";
           display(tout, get_monomial(x)); tout << "\n";);
     SASSERT(is_monomial(x));
@@ -1871,8 +1791,7 @@ void context_t<C>::propagate_monomial_downward(var x, node * n, unsigned j) {
     }
 }
 
-template<typename C>
-bool context_t<C>::most_recent(bound * b, node * n) const {
+bool context_t::most_recent(bound * b, node * n) const {
     var x = b->x();
     if (b->is_lower())
         return n->lower(x) == b;
@@ -1880,8 +1799,7 @@ bool context_t<C>::most_recent(bound * b, node * n) const {
         return n->upper(x) == b;
 }
 
-template<typename C>
-void context_t<C>::add_recent_bounds(node * n) {
+void context_t::add_recent_bounds(node * n) {
     SASSERT(m_queue.empty());
     bound * old_b = n->parent_trail_stack();
     bound * b     = n->trail_stack();
@@ -1894,8 +1812,7 @@ void context_t<C>::add_recent_bounds(node * n) {
     }
 }
 
-// template<typename C>
-// void context_t<C>::add_unpropagated_bounds(node * n) {
+// // void context_t::add_unpropagated_bounds(node * n) {
 //     bound * lpb   = n->last_processed_bounds();
 //     bound * b     = n->trail_stack();
 //     unsigned cnt = 0;
@@ -1909,8 +1826,7 @@ void context_t<C>::add_recent_bounds(node * n) {
 //     }
 // }
 
-template<typename C>
-void context_t<C>::propagate_def(var x, node * n) {
+void context_t::propagate_def(var x, node * n) {
     SASSERT(is_definition(x));
     m_num_visited++;
     definition * d = m_defs[x];
@@ -1926,8 +1842,7 @@ void context_t<C>::propagate_def(var x, node * n) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate_bvar(node * n, bound * b) {
+void context_t::propagate_bvar(node * n, bound * b) {
     var x = b->x();
     TRACE("subpaving_propagate", tout << "propagate: "; display(tout, b); tout << ", timestamp: " << b->timestamp() << "\n";);
     ++m_curr_propagate;
@@ -1942,15 +1857,14 @@ void context_t<C>::propagate_bvar(node * n, bound * b) {
             clause * c = w.get_clause();
             propagate_clause(c, n);
         }
-        catch (const typename C::exception &) {
+        catch (const typename config_mpq::exception &) {
             // arithmetic module failed, ignore constraint
             set_arith_failed();
         }
     }
 }
 
-template<typename C>
-bool context_t<C>::is_latest_bound(node * n, var x, uint64_t ts) {    
+bool context_t::is_latest_bound(node * n, var x, uint64_t ts) {    
     bound * curr_lower = n->lower(x);
     bound * curr_upper = n->upper(x);
     if (curr_lower != nullptr && curr_lower->timestamp() > ts)
@@ -1960,8 +1874,7 @@ bool context_t<C>::is_latest_bound(node * n, var x, uint64_t ts) {
     return true;
 }
 
-template<typename C>
-void context_t<C>::propagate(node * n, bound * b) {
+void context_t::propagate(node * n, bound * b) {
     var x = b->x();
     if (!is_latest_bound(n, x, b->timestamp()))
         return;
@@ -1988,7 +1901,7 @@ void context_t<C>::propagate(node * n, bound * b) {
                 }
             }
         }
-        catch (const typename C::exception &) {
+        catch (const typename config_mpq::exception &) {
             // arithmetic module failed, ignore constraint
             set_arith_failed();
         }
@@ -2003,8 +1916,7 @@ void context_t<C>::propagate(node * n, bound * b) {
     }
 }
 
-template<typename C>
-void context_t<C>::propagate(node * n) {
+void context_t::propagate(node * n) {
     m_curr_propagate = 0;
     time_t prop_start = std::time(nullptr);
     // unsigned prop_start = static_cast<unsigned>(std::time(nullptr));
@@ -2046,8 +1958,7 @@ void context_t<C>::propagate(node * n) {
     m_qhead = 0;
 }
 
-template<typename C>
-void context_t<C>::propagate_all_definitions(node * n) {
+void context_t::propagate_all_definitions(node * n) {
     unsigned num = num_vars();
     for (unsigned x = 0; x < num; x++) {
         if (inconsistent(n))
@@ -2063,8 +1974,7 @@ void context_t<C>::propagate_all_definitions(node * n) {
 //
 // -----------------------------------
 
-template<typename C>
-void context_t<C>::assert_units(node * n) {
+void context_t::assert_units(node * n) {
     typename ptr_vector<atom>::const_iterator it  = m_unit_clauses.begin();
     typename ptr_vector<atom>::const_iterator end = m_unit_clauses.end();
     for (; it != end; ++it) {
@@ -2099,13 +2009,11 @@ void context_t<C>::assert_units(node * n) {
     TRACE("subpaving_init", tout << "bounds after init\n"; display_bounds(tout, n););
 }
 
-template<typename C>
-void context_t<C>::write_line_to_coordinator(const std::string & line) {
+void context_t::write_line_to_coordinator(const std::string & line) {
     std::cout << line << std::endl;
 }
 
-template<typename C>
-void context_t<C>::write_ss_line_to_coordinator() {
+void context_t::write_ss_line_to_coordinator() {
     write_line_to_coordinator(m_temp_stringstream.str());
     m_temp_stringstream.str("");
     m_temp_stringstream.clear();
@@ -2115,15 +2023,13 @@ void context_t<C>::write_ss_line_to_coordinator() {
     // }
 }
 
-template<typename C>
-void context_t<C>::write_debug_line_to_coordinator(const std::string & line) {
+void context_t::write_debug_line_to_coordinator(const std::string & line) {
     if (!m_partitioner_debug)
         return;
     std::cout << control_message::P2C::debug_info << " " << line << std::endl;
 }
 
-template<typename C>
-void context_t<C>::write_debug_ss_line_to_coordinator() {
+void context_t::write_debug_ss_line_to_coordinator() {
     if (!m_partitioner_debug)
         return;
     write_debug_line_to_coordinator(m_temp_stringstream.str());
@@ -2131,8 +2037,7 @@ void context_t<C>::write_debug_ss_line_to_coordinator() {
     m_temp_stringstream.clear();
 }
 
-template<typename C>
-bool context_t<C>::read_line_from_coordinator() {
+bool context_t::read_line_from_coordinator() {
     if (m_read_buffer_head >= m_read_buffer_tail) {
         ssize_t n = read(STDIN_FILENO, m_read_buffer, m_read_buffer_len - 1);
         if (n > 0) {
@@ -2157,8 +2062,7 @@ bool context_t<C>::read_line_from_coordinator() {
     return false;
 }
 
-template<typename C>
-void context_t<C>::init_communication() {
+void context_t::init_communication() {
     // write configuration
     std::ios::sync_with_stdio(false);
     std::cout.setf(std::ios::unitbuf);
@@ -2173,8 +2077,7 @@ void context_t<C>::init_communication() {
     m_read_buffer_tail = 0;
 }
 
-template<typename C>
-void context_t<C>::init_partition() {
+void context_t::init_partition() {
     m_init = true;
     m_partitioner_debug = true;
     m_max_propagate = m_is_int.size();
@@ -2227,8 +2130,7 @@ void context_t<C>::init_partition() {
     }
 }
 
-template<typename C>
-void context_t<C>::init() {
+void context_t::init() {
     SASSERT(m_root       == 0);
     SASSERT(m_leaf_head  == 0);
     SASSERT(m_leaf_tail  == 0);
@@ -2248,8 +2150,7 @@ void context_t<C>::init() {
     SASSERT(check_invariant());
 }
 
-template<typename C>
-lit context_t<C>::convert_atom_to_lit(atom * a) {
+lit context_t::convert_atom_to_lit(atom * a) {
     lit l;
     l.m_x = a->m_x;
     // l.m_a = a;
@@ -2275,8 +2176,7 @@ lit context_t<C>::convert_atom_to_lit(atom * a) {
     return l;
 }
 
-template<typename C>
-bool context_t<C>::test_dominated(vector<lit> & longer_cla, vector<lit> & shorter_cla) {
+bool context_t::test_dominated(vector<lit> & longer_cla, vector<lit> & shorter_cla) {
     unsigned l_sz = longer_cla.size(), s_sz = shorter_cla.size();
     assert(l_sz >= s_sz);
     unsigned l_p = 0;
@@ -2331,8 +2231,7 @@ bool context_t<C>::test_dominated(vector<lit> & longer_cla, vector<lit> & shorte
     return true;
 }
 
-template<typename C>
-void context_t<C>::remove_dominated_clauses(vector<vector<lit>> & input, vector<vector<lit>> & output) {
+void context_t::remove_dominated_clauses(vector<vector<lit>> & input, vector<vector<lit>> & output) {
     const unsigned max_sz_thres = 10000;
     unsigned input_sz = input.size();
     if (input_sz == 0 || input_sz > max_sz_thres)
@@ -2373,8 +2272,7 @@ void context_t<C>::remove_dominated_clauses(vector<vector<lit>> & input, vector<
     }
 }
 
-template<typename C>
-bool context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
+bool context_t::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
     var current_var = null_var;
     lit current_lb, current_ub;
     ineq_lit_cmp ilc(nm());
@@ -2509,8 +2407,7 @@ bool context_t<C>::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & o
     return false;
 }
 
-template<typename C>
-bool context_t<C>::convert_node_to_task(node * n) {
+bool context_t::convert_node_to_task(node * n) {
     // bool encode_all_variables = true;
     bool encode_all_variables = false;
     task_info & task = *m_ptask;
@@ -2680,8 +2577,7 @@ bool context_t<C>::convert_node_to_task(node * n) {
     return false;
 }
 
-template<typename C>
-void context_t<C>::convert_root_to_task() {
+void context_t::convert_root_to_task() {
     node * n = m_root;
     task_info & task = m_bicp_task;
     // SASSERT(task.m_node_id == UINT32_MAX);
@@ -2831,8 +2727,7 @@ void context_t<C>::convert_root_to_task() {
     simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
 }
 
-template<typename C>
-void context_t<C>::collect_task_var_info() {
+void context_t::collect_task_var_info() {
     task_info & task = *m_ptask;
     unsigned nv = num_vars();
     SASSERT(nv > 0);
@@ -2909,8 +2804,7 @@ void context_t<C>::collect_task_var_info() {
     }
 }
 
-template<typename C>
-void context_t<C>::select_best_var(node * n) {
+void context_t::select_best_var(node * n) {
     collect_task_var_info();
     unsigned sz = m_var_split_candidates.size();
     if (sz == 0) {
@@ -3032,8 +2926,7 @@ void context_t<C>::select_best_var(node * n) {
 }
 
 // return true for already unsat
-template<typename C>
-bool context_t<C>::update_node_state_unsat(unsigned id) {
+bool context_t::update_node_state_unsat(unsigned id) {
     node_state & sta = m_nodes_state[id];
     if (sta == node_state::UNSAT)
         return true;
@@ -3060,8 +2953,7 @@ bool context_t<C>::update_node_state_unsat(unsigned id) {
     return false;
 }
 
-template<typename C>
-void context_t<C>::unsat_push_down(node * n) {
+void context_t::unsat_push_down(node * n) {
     //#linxi TBD
     if (update_node_state_unsat(n->id()))
         return;
@@ -3072,8 +2964,7 @@ void context_t<C>::unsat_push_down(node * n) {
     }
 }
 
-template<typename C>
-bool context_t<C>::can_propagate_unsat(node * n) {
+bool context_t::can_propagate_unsat(node * n) {
     node * ch = n->first_child();
     // if (ch == nullptr)
     //     return false;
@@ -3085,8 +2976,7 @@ bool context_t<C>::can_propagate_unsat(node * n) {
     return true;
 }
 
-template<typename C>
-void context_t<C>::unsat_push_up(node * n) {
+void context_t::unsat_push_up(node * n) {
     // SASSERT(m_nodes_state[id] != node_state::UNSAT);
     if (m_nodes_state[n->id()] == node_state::UNSAT)
         return;
@@ -3098,8 +2988,7 @@ void context_t<C>::unsat_push_up(node * n) {
         unsat_push_up(parent);
 }
 
-template<typename C>
-void context_t<C>::node_solved_unsat(node * n) {\
+void context_t::node_solved_unsat(node * n) {\
     if (update_node_state_unsat(n->id()))
         return;
     node * parent = n->parent();
@@ -3112,8 +3001,7 @@ void context_t<C>::node_solved_unsat(node * n) {\
     }
 }
 
-template<typename C>
-void context_t<C>::parse_line(const std::string & line) {
+void context_t::parse_line(const std::string & line) {
     std::stringstream ss(line);
     int op_id;
     ss >> op_id;
@@ -3140,8 +3028,7 @@ void context_t<C>::parse_line(const std::string & line) {
     }
 }
 
-template<typename C>
-void context_t<C>::communicate_with_coordinator() {
+void context_t::communicate_with_coordinator() {
     while (read_line_from_coordinator()) {
         write_debug_line_to_coordinator("read line from coordinator: " + m_current_line);
         parse_line(m_current_line);
@@ -3160,8 +3047,7 @@ void context_t<C>::communicate_with_coordinator() {
     2. most clauses
     3. most undecided literals
 */
-template<typename C>
-typename context_t<C>::node * context_t<C>::select_next_node() {
+typename context_t::node * context_t::select_next_node() {
     // return m_leaf_head; // filo
     // return m_leaf_tail; // fifo
     // if (m_leaf_heap.empty())
@@ -3185,8 +3071,7 @@ typename context_t<C>::node * context_t<C>::select_next_node() {
     return m_nodes[nid];
 }
 
-template<typename C>
-void context_t<C>::split_node(node * n) {
+void context_t::split_node(node * n) {
     select_best_var(n);
     unsigned id = m_best_var_info.m_id;
     if (id == null_var) {
@@ -3218,7 +3103,6 @@ void context_t<C>::split_node(node * n) {
     right->split_vars().push_back(id);
 
     bool blower, bopen;
-    bound * lb, * rb;
     numeral & mid = m_tmp1;
 
     vector<lit> x_lits;
@@ -3238,7 +3122,7 @@ void context_t<C>::split_node(node * n) {
         lit & l = x_lits[x_lits_sz >> 1];
         blower = static_cast<bool>(l.m_lower);
         bopen = static_cast<bool>(l.m_open);
-        nm().set(mid, l.m_val);
+        nm().set(mid, *l.m_val);
     }
     else {
         bound * lower = n->lower(id);
@@ -3286,12 +3170,14 @@ void context_t<C>::split_node(node * n) {
     numeral & nmid = m_tmp2;
     
     normalize_bound(id, mid, nmid, blower, bopen);
-    lb = mk_bound(id, nmid, blower, bopen, left, justification());
+    bound * lb = mk_bound(id, nmid, blower, bopen, left, justification());
+    // lb = mk_bound(id, nmid, blower, bopen, left, justification());
     
     blower = !blower;
     bopen = !bopen;
     normalize_bound(id, mid, nmid, blower, bopen);
-    rb = mk_bound(id, nmid, blower, bopen, right, justification());
+    bound * rb = mk_bound(id, nmid, blower, bopen, right, justification());
+    // rb = mk_bound(id, nmid, blower, bopen, right, justification());
 
     m_queue.push_back(lb);
     // add_unpropagated_bounds(n);
@@ -3332,8 +3218,7 @@ void context_t<C>::split_node(node * n) {
     }
 }
 
-template<typename C>
-bool context_t<C>::create_new_task() {
+bool context_t::create_new_task() {
     TRACE("subpaving_stats", statistics st; collect_statistics(st); tout << "statistics:\n"; st.display_smt2(tout););
     TRACE("subpaving_main", display_params(tout););
     
@@ -3418,8 +3303,7 @@ bool context_t<C>::create_new_task() {
 }
 
 // BICP and arithmetic partitioning start here
-template<typename C>
-lbool context_t<C>::operator()() {
+lbool context_t::operator()() {
     TRACE("linxi_subpaving", tout << "operator()\n");
     if (!m_init) {
         init_partition();
@@ -3480,8 +3364,7 @@ lbool context_t<C>::operator()() {
     return l_undef;
 }
 
-template<typename C>
-void context_t<C>::display_bounds(std::ostream & out) const {
+void context_t::display_bounds(std::ostream & out) const {
     ptr_vector<node> leaves;
     collect_leaves(leaves);
     typename ptr_vector<node>::const_iterator it  = leaves.begin();
@@ -3502,16 +3385,14 @@ void context_t<C>::display_bounds(std::ostream & out) const {
 //
 // -----------------------------------
 
-template<typename C>
-void context_t<C>::reset_statistics() {
+void context_t::reset_statistics() {
     m_num_conflicts = 0;
     m_num_mk_bounds = 0;
     m_num_splits    = 0;
     m_num_visited   = 0;
 }
 
-template<typename C>
-void context_t<C>::collect_statistics(statistics & st) const {
+void context_t::collect_statistics(statistics & st) const {
     st.update("conflicts",  m_num_conflicts);
     st.update("new bounds", m_num_mk_bounds);
     st.update("splits",     m_num_splits);
@@ -3525,8 +3406,7 @@ void context_t<C>::collect_statistics(statistics & st) const {
 //
 // -----------------------------------
 
-template<typename C>
-bool context_t<C>::is_bound_of(bound * b, node * n) const {
+bool context_t::is_bound_of(bound * b, node * n) const {
     bound * c = n->trail_stack();
     while (c != nullptr) {
         if (c == b)
@@ -3538,8 +3418,7 @@ bool context_t<C>::is_bound_of(bound * b, node * n) const {
     return false;
 }
 
-template<typename C>
-bool context_t<C>::check_leaf_dlist() const {
+bool context_t::check_leaf_dlist() const {
     node * n = m_leaf_head;
     while (n != nullptr) {
         node * next = n->next();
@@ -3550,8 +3429,7 @@ bool context_t<C>::check_leaf_dlist() const {
     return true;
 }
 
-template<typename C>
-bool context_t<C>::check_tree() const {
+bool context_t::check_tree() const {
     ptr_buffer<node> todo;
     if (m_root != nullptr)
         todo.push_back(m_root);
@@ -3568,8 +3446,7 @@ bool context_t<C>::check_tree() const {
     return true;
 }
 
-template<typename C>
-bool context_t<C>::check_invariant() const {
+bool context_t::check_invariant() const {
     SASSERT(check_tree());
     SASSERT(check_leaf_dlist());
     return true;

@@ -43,10 +43,21 @@ Revision History:
 
 namespace subpaving {
 
-template<typename C>
+struct config_mpq {
+    typedef unsynch_mpq_manager numeral_manager;
+    struct exception {};
+
+    static void round_to_minus_inf(numeral_manager & m) {}
+    static void round_to_plus_inf(numeral_manager & m) {}
+    static void set_rounding(numeral_manager & m, bool to_plus_info) {}
+    numeral_manager & m_manager;
+    config_mpq(numeral_manager & m):m_manager(m) {}
+    numeral_manager & m() const { return m_manager; }
+};
+
 class context_t {
 public:
-    typedef typename C::numeral_manager       numeral_manager;
+    typedef typename config_mpq::numeral_manager       numeral_manager;
     typedef typename numeral_manager::numeral numeral;
 
     /**
@@ -317,7 +328,7 @@ public:
     
     class interval_config {
     public:
-        typedef typename C::numeral_manager         numeral_manager;
+        typedef typename config_mpq::numeral_manager         numeral_manager;
         typedef typename numeral_manager::numeral   numeral;
         typedef typename context_t::interval        interval;
     private:
@@ -326,9 +337,9 @@ public:
         interval_config(numeral_manager & m):m_manager(m) {}
 
         numeral_manager & m() const { return m_manager; }
-        void round_to_minus_inf() { C::round_to_minus_inf(m()); }
-        void round_to_plus_inf() {  C::round_to_plus_inf(m()); }
-        void set_rounding(bool to_plus_inf) {  C::set_rounding(m(), to_plus_inf); }
+        void round_to_minus_inf() { config_mpq::round_to_minus_inf(m()); }
+        void round_to_plus_inf() {  config_mpq::round_to_plus_inf(m()); }
+        void set_rounding(bool to_plus_inf) {  config_mpq::set_rounding(m(), to_plus_inf); }
         numeral const & lower(interval const & a) const {
             if (a.m_constant) {
                 bound * b = a.m_node->lower(a.m_x);
@@ -690,7 +701,7 @@ public:
 
 private:
     reslimit&                 m_limit;
-    C                         m_c;
+    config_mpq                m_c;
     bool                      m_arith_failed; //!< True if the arithmetic module produced an exception.
     bool                      m_own_allocator;
     small_object_allocator *  m_allocator;
@@ -1145,7 +1156,7 @@ private:
     bool check_invariant() const;
 
 public:
-    context_t(reslimit& lim, C const & c, params_ref const & p, small_object_allocator * a);
+    context_t(reslimit& lim, config_mpq const & c, params_ref const & p, small_object_allocator * a);
     ~context_t();
 
     /**
