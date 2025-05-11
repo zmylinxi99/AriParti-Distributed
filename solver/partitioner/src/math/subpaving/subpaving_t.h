@@ -594,41 +594,83 @@ public:
         }
     };
 
+    // struct lit_lt {
+    //     numeral_manager & m_nm;
+    //     lit_lt(numeral_manager & _nm) : m_nm(_nm) {}
+    //     // bool lit, eq lit, ineq lit
+    //     bool operator()(const lit & lhs, const lit & rhs) const {
+    //         // bool, eq | ineq
+    //         if (lhs.m_bool != rhs.m_bool)
+    //             return lhs.m_bool;
+    //         if (lhs.m_bool) {
+    //             // bool | eq
+    //             if (lhs.m_open != rhs.m_open)
+    //                 return !lhs.m_open;
+    //             if (lhs.m_open) {
+    //                 // eq
+    //                 if (lhs.m_x != rhs.m_x)
+    //                     return lhs.m_x < rhs.m_x;
+    //                 if (lhs.m_lower != rhs.m_lower)
+    //                     return lhs.m_lower < rhs.m_lower;
+    //                 return m_nm.lt(*lhs.m_val, *rhs.m_val);
+    //             }
+    //             else {
+    //                 // bool
+    //                 if (lhs.m_x != rhs.m_x)
+    //                     return lhs.m_x < rhs.m_x;
+    //                 return lhs.m_lower;
+    //             }
+    //         }
+    //         else {
+    //             // return lhs.m_x < rhs.m_x;
+    //             if (lhs.m_x != rhs.m_x)
+    //                 return lhs.m_x < rhs.m_x;
+    //             if (lhs.m_lower != rhs.m_lower)
+    //                 return lhs.m_lower < rhs.m_lower;
+    //             return m_nm.lt(*lhs.m_val, *rhs.m_val);
+    //         }
+    //     }
+    // };
+
     struct lit_lt {
         numeral_manager & m_nm;
         lit_lt(numeral_manager & _nm) : m_nm(_nm) {}
+        // bool lit, ineq lit, eq lit
+        bool operator()(const lit & lhs, const lit & rhs) const {
+            if (lhs.m_x != rhs.m_x)
+                return lhs.m_x < rhs.m_x;
+            bool lhs_is_bool = lhs.is_bool_lit();
+            bool rhs_is_bool = rhs.is_bool_lit();
+            if (lhs_is_bool != rhs_is_bool)
+                return lhs_is_bool;
+            bool lhs_is_ineq = lhs.is_ineq_lit();
+            bool rhs_is_ineq = rhs.is_ineq_lit();
+            if (lhs_is_ineq != rhs_is_ineq)
+                return lhs_is_ineq;
+            return false;
+        }
+    };
+
+    struct arith_lit_lt {
+        numeral_manager & m_nm;
+        arith_lit_lt(numeral_manager & _nm) : m_nm(_nm) {}
         // bool lit, eq lit, ineq lit
         bool operator()(const lit & lhs, const lit & rhs) const {
-            // bool, eq | ineq
-            if (lhs.m_bool != rhs.m_bool)
-                return lhs.m_bool;
-            if (lhs.m_bool) {
-                // bool | eq
-                if (lhs.m_open != rhs.m_open)
-                    return !lhs.m_open;
-                if (lhs.m_open) {
-                    // eq
-                    if (lhs.m_x != rhs.m_x)
-                        return lhs.m_x < rhs.m_x;
-                    if (lhs.m_lower != rhs.m_lower)
-                        return lhs.m_lower < rhs.m_lower;
-                    return m_nm.lt(*lhs.m_val, *rhs.m_val);
-                }
-                else {
-                    // bool
-                    if (lhs.m_x != rhs.m_x)
-                        return lhs.m_x < rhs.m_x;
-                    return lhs.m_lower;
-                }
-            }
-            else {
-                // return lhs.m_x < rhs.m_x;
-                if (lhs.m_x != rhs.m_x)
-                    return lhs.m_x < rhs.m_x;
-                if (lhs.m_lower != rhs.m_lower)
-                    return lhs.m_lower < rhs.m_lower;
+            // assert(lhs.m_x == rhs.m_x);
+            assert(lhs.m_lower == rhs.m_lower);
+            // assert(!lhs.m_bool && !rhs.m_bool);
+            // (x < 3), (x > 5)
+            if (!m_nm.eq(*lhs.m_val, *rhs.m_val))
                 return m_nm.lt(*lhs.m_val, *rhs.m_val);
-            }
+            // ub: (x <= 3), lb: (x > 3)
+            if (lhs.m_lower != rhs.m_lower)
+                return !lhs.m_lower;
+            if (lhs.m_lower)
+                // close: (x >= 3), open: (x > 3)
+                return !lhs.m_open;
+            else
+                // open: (x < 3), close: (x <= 3)
+                return lhs.m_open;
         }
     };
 
@@ -1220,7 +1262,10 @@ public:
     */
     void display_constraints(std::ostream & out, bool use_star = false) const;
 
+    std::string lit_to_string(const lit & l) const;
+
     /**
+     * 
        \brief Display bounds for each leaf of the tree.
     */
     void display_bounds(std::ostream & out) const;

@@ -33,6 +33,34 @@ Revision History:
 
 namespace subpaving {
 
+std::string context_t::lit_to_string(const lit & l) const {
+    std::stringstream ss;
+    ss << "var[" << l.m_x << "]";
+    if (l.m_bool) {
+        ss << " = ";
+        if (l.m_open) {
+             ss << nm().to_rational_string(*l.m_val);
+        }
+        else {
+            if (l.m_lower)
+                ss << "true";
+            else
+                ss << "false";
+        }
+    }
+    else {
+        if (l.m_lower)
+            ss << " >";
+        else
+            ss << " <";
+        if (!l.m_open)
+            ss << "=";
+        ss << " ";
+        ss << nm().to_rational_string(*l.m_val);
+    }
+    return ss.str();
+}
+
 /**
    \brief Auxiliary static method used to display a bound specified by (x, k, lower, open).
 */
@@ -2274,12 +2302,22 @@ void context_t::remove_dominated_clauses(vector<vector<lit>> & input, vector<vec
 
 bool context_t::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & output, bool is_conjunction) {
     var current_var = null_var;
+    bool eq_covered = false;
     lit current_lb, current_ub;
     ineq_lit_cmp ilc(nm());
     
     std::sort(input.begin(), input.end(), lit_lt(nm()));
 
-    auto collect_lit_bounds = [](numeral_manager & tnm, vector<lit> & output, lit & current_lb, lit & current_ub, var & current_var, bool is_conjunction) {
+    // {
+    //     m_temp_stringstream << "simplify_ineqs_in_clause before: ";
+    //     write_debug_ss_line_to_coordinator();
+    //     for (const lit & l : input) {
+    //         m_temp_stringstream << "(" << lit_to_string(l) << ") ";
+    //     }
+    //     write_debug_ss_line_to_coordinator();
+    // }
+
+    auto collect_lit_bounds = [](numeral_manager & tnm, vector<lit> & output, lit & current_lb, lit & current_ub, bool is_conjunction, bool eq_covered) {
         if (is_conjunction) {
             if (current_lb.m_x != null_var && current_ub.m_x != null_var) {
                 // lb > ub: x > 3 and x < 1   (unsat)
@@ -2332,11 +2370,13 @@ bool context_t::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & outp
             }
         }
         if (current_lb.m_x != null_var) {
-            output.push_back(current_lb);
+            if (!eq_covered)
+                output.push_back(current_lb);
             current_lb.reset();
         }
         if (current_ub.m_x != null_var) {
-            output.push_back(current_ub);
+            if (!eq_covered)
+                output.push_back(current_ub);
             current_ub.reset();
         }
         return false;
@@ -2344,16 +2384,18 @@ bool context_t::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & outp
 
     for (unsigned i = 0, isz = input.size(); i < isz; ++i) {
         const lit & l = input[i];
-        if (l.is_bool_lit() || l.is_eq_lit()) {
+        if (current_var != l.m_x) {
+            if (collect_lit_bounds(nm(), output, current_lb, current_ub, is_conjunction, eq_covered))
+                return true;
+            current_var = l.m_x;
+            eq_covered = false;
+        }
+        
+        if (l.is_bool_lit()) {
+            // TBD boolean literal reduction
             output.push_back(l);
         }
         else if (l.is_ineq_lit()) {
-            if (l.m_x != current_var) {
-                if (collect_lit_bounds(nm(), output, current_lb, current_ub, current_var, is_conjunction))
-                    return true;
-                current_var = l.m_x;
-            }
-            
             if (l.m_lower) {
                 if (current_lb.m_x == null_var) {
                     current_lb = l;
@@ -2391,15 +2433,153 @@ bool context_t::simplify_ineqs_in_clause(vector<lit> & input, vector<lit> & outp
                 }
             }
         }
+        else if (l.is_eq_lit()) {
+            // output.push_back(l);
+            if (is_conjunction) {
+                // {lb, ub}
+                bool contain_val = true;
+                if (current_lb.m_x != null_var) {
+                    if (nm().gt(*current_lb.m_val, *l.m_val)) {
+                        // lb: >= 3, eq: = 2
+                        contain_val = false;
+                    }
+                    else if (nm().eq(*current_lb.m_val, *l.m_val)) {
+                        // lb: > 3, eq: = 3
+                        if (current_lb.m_open)
+                            contain_val = false;
+                    }
+                }
+                if (current_ub.m_x != null_var) {
+                    if (nm().lt(*current_ub.m_val, *l.m_val)) {
+                        // ub: <= 3, eq: = 4
+                        contain_val = false;
+                    }
+                    else if (nm().eq(*current_ub.m_val, *l.m_val)) {
+                        // ub: < 3, eq: = 3
+                        if (current_ub.m_open)
+                            contain_val = false;
+                    }
+                }
+                if (contain_val) {
+                    // [3, 10), x ~ 7
+                    if (l.m_lower) {
+                        // x != 7
+                        output.push_back(l);
+                    }
+                    else {
+                        // x == 7
+                        output.push_back(l);
+                        eq_covered = true;
+                    }
+                }
+                else {
+                    // [3, 10), x ~ 2
+                    if (l.m_lower) {
+                        // x != 2
+                        // do nothing
+                    }
+                    else {
+                        // x == 2 -> unsat
+                        output.reset();
+                        return true;
+                    }
+                }
+            }
+            else {
+                // {-inf, ub} or {lb, inf}
+                bool contain_val = false;
+                if (current_lb.m_x != null_var) {
+                    if (nm().lt(*current_lb.m_val, *l.m_val)) {
+                        // lb: >= 3, eq: = 4
+                        contain_val = true;
+                    }
+                    else if (nm().eq(*current_lb.m_val, *l.m_val)) {
+                        // lb: >= 3, eq: = 3
+                        if (!current_lb.m_open)
+                            contain_val = true;
+                    }
+                }
+                if (current_ub.m_x != null_var) {
+                    if (nm().gt(*current_ub.m_val, *l.m_val)) {
+                        // ub: <= 3, eq: = 2
+                        contain_val = true;
+                    }
+                    else if (nm().eq(*current_ub.m_val, *l.m_val)) {
+                        // ub: <= 3, eq: = 3
+                        if (!current_ub.m_open)
+                            contain_val = true;
+                    }
+                }
+                if (contain_val) {
+                    // 3] (10, x ~ 2
+                    if (l.m_lower) {
+                        // x != 2 -> tautology
+                        return true;
+                    }
+                    else {
+                        // x == 2
+                        // do nothing
+                    }
+                }
+                else {
+                    // 3] (10, x ~ 7
+                    if (l.m_lower) {
+                        // x != 7
+                        output.push_back(l);
+                        eq_covered = true;
+                    }
+                    else {
+                        // x == 7
+                        output.push_back(l);
+                    }
+                }
+            }
+            {
+                if (eq_covered && current_lb.m_x != null_var && current_ub.m_x != null_var) {
+                    m_temp_stringstream << "eq_covered: " << lit_to_string(l);
+                    write_debug_ss_line_to_coordinator();
+                    if (current_lb.m_x != null_var) {
+                        m_temp_stringstream << "current_lb: " << lit_to_string(current_lb);
+                        write_debug_ss_line_to_coordinator();
+                    }
+                    if (current_ub.m_x != null_var) {
+                        m_temp_stringstream << "current_ub: " << lit_to_string(current_ub);
+                        write_debug_ss_line_to_coordinator();
+                    }
+                }
+            }
+        }
         else {
             assert(false);
         }
     }
 
-    if (collect_lit_bounds(nm(), output, current_lb, current_ub, current_var, is_conjunction))
+    if (collect_lit_bounds(nm(), output, current_lb, current_ub, is_conjunction, eq_covered))
         return true;
-
+    
     unsigned reduced = input.size() - output.size();
+    // if (reduced > 0) {
+    //     m_temp_stringstream << "simplify_ineqs_in_clause: ";
+    //     if (is_conjunction)
+    //         m_temp_stringstream << "conjunction";
+    //     else
+    //         m_temp_stringstream << "disjunction";
+    //     m_temp_stringstream << ", reduced: " << reduced;
+    //     write_debug_ss_line_to_coordinator();
+    //     m_temp_stringstream << "input (" << input.size() << "):";
+    //     write_debug_ss_line_to_coordinator();
+    //     for (const lit & l : input) {
+    //         m_temp_stringstream << "(" << lit_to_string(l) << ") ";
+    //     }
+    //     write_debug_ss_line_to_coordinator();
+        
+    //     m_temp_stringstream << "output (" << output.size() << "):";
+    //     write_debug_ss_line_to_coordinator();
+    //     for (const lit & l : output) {
+    //         m_temp_stringstream << "(" << lit_to_string(l) << ") ";
+    //     }
+    //     write_debug_ss_line_to_coordinator();
+    // }
     if (is_conjunction)
         m_conj_simplified_cnt += reduced;
     else
@@ -3106,20 +3286,59 @@ void context_t::split_node(node * n) {
     numeral & mid = m_tmp1;
 
     vector<lit> x_lits;
-
+    // vector<lit> x_lb_lits, x_ub_lits;
     for (const vector<lit> & cla : m_ptask->m_clauses) {
         for (const lit & l : cla) {
             unsigned x = l.m_x;
-            if (m_is_bool[x])
+            if (l.m_bool)
                 continue;
-            if (x == id)
-                x_lits.push_back(l);
+            if (x != id)
+                continue;
+            x_lits.push_back(l);
+            // if (l.m_lower)
+            //     x_lb_lits.push_back(l);
+            // else
+            //     x_ub_lits.push_back(l);
         }
     }
+
     unsigned x_lits_sz = x_lits.size();
     if (x_lits_sz > 0) {
-        std::sort(x_lits.begin(), x_lits.end(), lit_lt(nm()));
-        lit & l = x_lits[x_lits_sz >> 1];
+        {
+            m_temp_stringstream << "x_lits_sz: " << x_lits_sz;
+            write_debug_ss_line_to_coordinator();
+        }
+        std::sort(x_lits.begin(), x_lits.end(), arith_lit_lt(nm()));
+        {
+            for (const lit & l : x_lits) {
+                m_temp_stringstream << "(" << lit_to_string(l) << ") ";
+            }
+            write_debug_ss_line_to_coordinator();
+        }
+        vector<unsigned> suf(x_lits_sz + 1);
+        suf[x_lits_sz] = 0;
+        for (int i = x_lits_sz - 1; i >= 0; --i) {
+            suf[i] = suf[i + 1];
+            if (x_lits[i].m_lower)
+                ++suf[i];
+        }
+        unsigned best_lit_id = 0, best_score = 0;
+        unsigned pre = 0;
+        for (unsigned i = 0; i < x_lits_sz; ++i) {
+            if (!x_lits[i].m_lower)
+                ++pre;
+            unsigned score = suf[i] + pre;
+            if (score > best_score) {
+                best_score = score;
+                best_lit_id = i;
+            }
+        }
+        {
+            m_temp_stringstream << "best_lit_id: " << best_lit_id
+                << ", best_score: " << best_score;
+            write_debug_ss_line_to_coordinator();
+        }
+        lit & l = x_lits[best_lit_id];
         blower = static_cast<bool>(l.m_lower);
         bopen = static_cast<bool>(l.m_open);
         nm().set(mid, *l.m_val);
@@ -3129,7 +3348,8 @@ void context_t::split_node(node * n) {
         bound * upper = n->upper(id);
         
         blower = false;
-        bopen = true;
+        bopen = false;
+        // x <= mid, x > mid
         if (m_best_var_info.m_cz) {
             nm().set(mid, 0);
             // mid == 0
