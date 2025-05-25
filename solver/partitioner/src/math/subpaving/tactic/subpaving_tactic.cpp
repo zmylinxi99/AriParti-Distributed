@@ -65,6 +65,7 @@ class subpaving_tactic : public tactic {
         expr2var                        m_e2v;
         scoped_ptr<expr2subpaving>      m_e2s;
         bool                            m_display;
+        bool                            m_parti_debug;
 
         //#linxi
         expr_ref_vector                 m_v2e;
@@ -90,6 +91,9 @@ class subpaving_tactic : public tactic {
             m_nl_val_num(0),
             m_logic()
         {
+            m_parti_debug = false;
+            // //#linxi debug
+            // m_parti_debug = true;
             updt_params(p);
         }
         
@@ -130,6 +134,9 @@ class subpaving_tactic : public tactic {
         
         // return true iff the atom is always TRUE
         bool mk_atom(expr * a, ref_buffer<subpaving::atom, subpaving::context> & atom_buffer) {
+            if (m_parti_debug) {
+                std::cout << "0 " << "mk_atom: " << mk_smt_pp(a, m_manager) << "\n";
+            }
             TRACE("linxi_subpaving",
                 tout << "mk_atom: " << mk_smt_pp(a, m_manager) << "\n";
             );
@@ -164,12 +171,17 @@ class subpaving_tactic : public tactic {
                 open  = !open;
             }
             rational _k;
-            if (!m_autil.is_numeral(to_app(a)->get_arg(1), _k))
+            if (!m_autil.is_numeral(to_app(a)->get_arg(1), _k)) {
+                std::cout << "0 " << "not a numeral: " << mk_smt_pp(a, m_manager) << "\n";
                 throw tactic_exception("use simplify tactic with option :arith-lhs true");
+            }
             scoped_mpq k(m_qm), qk(m_qm);
             k = _k.to_mpq();
             scoped_mpz n(m_qm), d(m_qm);
             m_qm.set(qk, 0);
+            if (m_parti_debug) {
+                std::cout << "0 " << "before internalize_term: " << mk_smt_pp(a, m_manager) << "\n";
+            }
             // n / d * x ~ qk
             subpaving::var x = m_e2s->internalize_term(to_app(a)->get_arg(0), n, d, qk);
             m_qm.sub(k, qk, k);
@@ -178,6 +190,11 @@ class subpaving_tactic : public tactic {
             if (is_neg(n))
                 lower = !lower;
             TRACE("subpaving_tactic", tout << x << " " << k << " " << lower << " " << open << "\n";);
+            if (m_parti_debug) {
+                std::cout << "0 " << "x: " << x << ", k: " << k << ", lower: " << lower
+                    << ", open: " << open << ", is_ineq: " << is_ineq
+                    << ", neg: " << neg << "\n";
+            }
             TRACE("linxi_subpaving",
                 tout << "x: " << x << ", k: " << k << ", lower: " << lower
                      << ", open: " << open << ", is_ineq: " << is_ineq
@@ -229,6 +246,9 @@ class subpaving_tactic : public tactic {
         }
 
         void process_clause(expr * c) {
+            if (m_parti_debug) {
+                std::cout << "0 " << "process_clause: " << mk_smt_pp(c, m_manager) << "\n";
+            }
             TRACE("linxi_subpaving",
                 tout << "process_clause: " << mk_smt_pp(c, m_manager) << "\n";
             );
@@ -244,6 +264,9 @@ class subpaving_tactic : public tactic {
             }
             ref_buffer<subpaving::atom, subpaving::context> atom_buffer(*m_ctx);
             for (unsigned i = 0; i < sz; i++) {
+                // if (m_parti_debug) {
+                //     std::cout << "0 " << "atom: " << i << "\n";
+                // }
                 if (mk_atom(args[i], atom_buffer))
                     return;
             }
@@ -254,12 +277,24 @@ class subpaving_tactic : public tactic {
         
         void internalize(goal const & g) {
             try {
-                for (unsigned i = 0; i < g.size(); i++) {
+                if (m_parti_debug) {
+                    std::cout << "0 " << "internalize goal: " << g.size() << "\n";
+                }
+                for (unsigned i = 0, sz = g.size(); i < sz; ++i) {
+                    if (m_parti_debug) {
+                        std::cout << "0 " << i << "\n";
+                    }
                     process_clause(g.form(i));
                 }
             }
             catch (const subpaving::exception &) {
                 throw tactic_exception("failed to internalize goal into subpaving module");
+            }
+            catch (const std::exception & ex) {
+                if (m_parti_debug) {
+                    std::cout << "0 " << "exception: " << ex.what() << "\n";
+                }
+                throw ex;
             }
         }
 
@@ -416,8 +451,12 @@ class subpaving_tactic : public tactic {
             }
             convert_task_to_exprs();
             unsigned sz = m_task_expr_clauses.size();
-            if (sz == 0)
+            if (sz == 0) {
+                if (m_parti_debug) {
+                    std::cout << "0 " << "empty task\n";
+                }
                 return;
+            }
             std::string task_name;
             {
                 std::stringstream ss;
@@ -434,6 +473,7 @@ class subpaving_tactic : public tactic {
             for (unsigned i = 0; i < sz; ++i) {
                 pp.add_assumption(m_task_expr_clauses[i].get());
             }
+            
             pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
             if (m_get_model_flag) {
                 ofs << "(get-model)\n";
@@ -473,6 +513,9 @@ class subpaving_tactic : public tactic {
 
         void process(goal_ref const & g, 
                      goal_ref_buffer & result) {
+            if (m_parti_debug) {
+                std::cout << "0 " << "subpaving start\n";
+            }
             TRACE("linxi_subpaving",
                 g->display(tout);
                 tout << "\n";
@@ -483,9 +526,22 @@ class subpaving_tactic : public tactic {
             }
             lbool res;
             try {
+                // if (m_parti_debug) {
+                //     std::cout << "0 " << "subpaving get_params\n";
+                // }
                 get_params();
+                if (m_parti_debug) {
+                    std::cout << "0 " << "subpaving internalize\n";
+                }
                 internalize(*g);
                 m_e2v.mk_inv(m_v2e);
+                if (m_parti_debug) {
+                    for (unsigned i = 0, sz = m_v2e.size(); i < sz; ++i) {
+                        expr *e = m_v2e[i].get();
+                        if (e != nullptr)
+                            std::cout << "0 " << "var[" << i << "] = " << mk_smt_pp(m_v2e[i].get(), m_manager) << "\n";
+                    }
+                }
                 TRACE("linxi_subpaving",
                     for (unsigned i = 0, sz = m_v2e.size(); i < sz; ++i) {
                         expr *e = m_v2e[i].get();
@@ -499,11 +555,19 @@ class subpaving_tactic : public tactic {
                 res = solve();
             }
             catch (tactic_exception & ex) {
+                if (m_parti_debug) {
+                    std::cout << "0 " << "subpaving exception: " << ex.msg() << "\n";
+                }
                 if (strcmp(ex.msg(), "LINXI: unsat by empty clause") == 0) {
                     res = l_false;
                 }
                 else {
                     throw ex;
+                }
+            }
+            catch (z3_exception & ex) {
+                if (m_parti_debug) {
+                    std::cout << "0 " << "z3 exception: " << ex.msg() << "\n";
                 }
             }
             
@@ -631,7 +695,8 @@ tactic * mk_subpaving_tactic(ast_manager & m, params_ref const & p) {
     simp2_p.set_bool("arith_lhs", true);
     simp2_p.set_bool("mul_to_power", true);
     return and_then(
-                mk_elim_term_ite_tactic(m, p),\
+                mk_purify_arith_tactic(m, p),
+                mk_elim_term_ite_tactic(m, p),
                 //#linxi TBD
                 // mk_solve_eqs_tactic(m, p),
                 using_params(mk_simplify_tactic(m, p), simp_p),

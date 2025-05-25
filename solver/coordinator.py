@@ -67,6 +67,8 @@ class Coordinator:
         
         self.status: CoordinatorStatus = CoordinatorStatus.idle
         self.result = NodeStatus.unsolved
+        
+        self.original_process = None
         self.partitioner = None
         self.tree = None
         

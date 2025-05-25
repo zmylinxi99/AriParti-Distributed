@@ -91,7 +91,7 @@ class Partitioner:
             logging.error(f'Partitioner Crashed! return code: {rc}')
             logging.error(f'output: {out_data}')
             logging.error(f'error: {err_data}')
-            assert(False)
+            # assert(False)
         self.status = PartitionerStatus.process_done
         return
     

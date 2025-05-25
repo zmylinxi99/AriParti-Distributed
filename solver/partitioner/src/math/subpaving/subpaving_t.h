@@ -639,14 +639,10 @@ public:
         bool operator()(const lit & lhs, const lit & rhs) const {
             if (lhs.m_x != rhs.m_x)
                 return lhs.m_x < rhs.m_x;
-            bool lhs_is_bool = lhs.is_bool_lit();
-            bool rhs_is_bool = rhs.is_bool_lit();
-            if (lhs_is_bool != rhs_is_bool)
-                return lhs_is_bool;
-            bool lhs_is_ineq = lhs.is_ineq_lit();
-            bool rhs_is_ineq = rhs.is_ineq_lit();
-            if (lhs_is_ineq != rhs_is_ineq)
-                return lhs_is_ineq;
+            if (lhs.is_bool_lit() != rhs.is_bool_lit())
+                return lhs.is_bool_lit();
+            if (lhs.is_ineq_lit() != rhs.is_ineq_lit())
+                return lhs.is_ineq_lit();
             return false;
         }
     };
@@ -656,10 +652,11 @@ public:
         arith_lit_lt(numeral_manager & _nm) : m_nm(_nm) {}
         // bool lit, eq lit, ineq lit
         bool operator()(const lit & lhs, const lit & rhs) const {
-            // assert(lhs.m_x == rhs.m_x);
-            assert(lhs.m_lower == rhs.m_lower);
+            assert(lhs.m_x == rhs.m_x);
+            // assert(lhs.m_lower == rhs.m_lower);
             // assert(!lhs.m_bool && !rhs.m_bool);
             // (x < 3), (x > 5)
+            return false;
             if (!m_nm.eq(*lhs.m_val, *rhs.m_val))
                 return m_nm.lt(*lhs.m_val, *rhs.m_val);
             // ub: (x <= 3), lb: (x > 3)
@@ -825,6 +822,7 @@ private:
     numeral             m_split_delta;
 
     bool                m_init;
+    bool                m_parti_debug;
     std::string         m_output_dir;
     
     unsigned            m_max_running_tasks;

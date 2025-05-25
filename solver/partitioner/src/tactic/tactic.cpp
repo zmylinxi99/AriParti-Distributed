@@ -185,6 +185,8 @@ lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, p
         exec(t, g, r);
     }
     catch (z3_exception & ex) {
+        //#linxi debug
+        // std::cout << "0 " << "z3 exception: " << ex.msg() << "\n";
         reason_unknown = ex.msg();
         if (r.size() > 0) pr = r[0]->pr(0);
         return l_undef;
