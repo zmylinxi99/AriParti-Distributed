@@ -656,7 +656,7 @@ public:
             // assert(lhs.m_lower == rhs.m_lower);
             // assert(!lhs.m_bool && !rhs.m_bool);
             // (x < 3), (x > 5)
-            return false;
+            // return false;
             if (!m_nm.eq(*lhs.m_val, *rhs.m_val))
                 return m_nm.lt(*lhs.m_val, *rhs.m_val);
             // ub: (x <= 3), lb: (x > 3)

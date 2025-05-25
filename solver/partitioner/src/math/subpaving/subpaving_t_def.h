@@ -3321,12 +3321,12 @@ void context_t::split_node(node * n) {
         write_debug_ss_line_to_coordinator();
     }
     if (x_lits_sz > 0) {
-        {
-            for (const lit & l : x_lits) {
-                m_temp_stringstream << "(" << lit_to_string(l) << ") ";
-            }
-            write_debug_ss_line_to_coordinator();
-        }
+        // {
+        //     for (const lit & l : x_lits) {
+        //         m_temp_stringstream << "(" << lit_to_string(l) << ") ";
+        //     }
+        //     write_debug_ss_line_to_coordinator();
+        // }
         // std::sort(x_lits.begin(), x_lits.end(), arith_lit_lt(nm()));
         // {
         //     m_temp_stringstream << "sort done";
@@ -3376,6 +3376,10 @@ void context_t::split_node(node * n) {
         std::uniform_int_distribution<> dis(0, x_lits_sz - 1);
         random_id = dis(m_rand);
         lit & l = x_lits[random_id];
+        {
+            m_temp_stringstream << "split lit(left child): " << lit_to_string(l);
+            write_debug_ss_line_to_coordinator();
+        }
         // lit & l = x_lits[x_lits_sz >> 1];
         blower = static_cast<bool>(l.m_lower);
         bopen = static_cast<bool>(l.m_open);
@@ -3424,7 +3428,6 @@ void context_t::split_node(node * n) {
             // mid == (lower + upper)/2
         }
     }
-
     // numeral & nmid = m_tmp2;
     scoped_mpq nmid(nm());
     

@@ -86,7 +86,9 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         sys.exit('Usage: python3 AriParti_launcher.py <request_directory>')
     
-    output_total_time = True
+    # output_total_time = True
+    output_total_time = False
+    
     if output_total_time:
         start_time = time.time()
     
@@ -222,5 +224,6 @@ if __name__ == '__main__':
     if output_total_time:
         end_time = time.time()
         execution_time = end_time - start_time
-        print(f'total cost time (start MPI and clean up):\n{execution_time}')
+        print('total cost time (start MPI and clean up):')
+        print(execution_time)
     
