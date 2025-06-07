@@ -35,7 +35,9 @@ namespace subpaving {
 
 std::string context_t::lit_to_string(const lit & l) const {
     std::stringstream ss;
-    ss << "var[" << l.m_x << "]";
+    ss << "var[" << l.m_x << "](";
+    (*m_display_proc)(ss, l.m_x);
+    ss << ")";
     if (l.m_bool) {
         ss << " = ";
         if (l.m_open) {
@@ -82,7 +84,42 @@ void context_t::display(std::ostream & out, numeral_manager & nm, display_var_pr
 }
 
 void context_t::atom::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
-    context_t::display(out, nm, proc, m_x, m_val, is_lower(), is_open());
+    if (m_bool) {
+        if (m_open) {
+            out << "eq ";
+            proc(out, m_x);
+            out << " ";
+            if (m_lower)
+                out << "!";
+            out << "= "<< nm.to_rational_string(m_val);
+        }
+        else {
+            out << "bool ";
+            proc(out, m_x);
+            out << " = ";
+            if (m_lower)
+                out << "true";
+            else
+                out << "false";
+        }
+    }
+    else {
+        if (m_lower) {
+            out << nm.to_rational_string(m_val) << " <";
+            if (!m_open)
+                out << "=";
+            out << " ";
+            proc(out, m_x);
+        }
+        else {
+            proc(out, m_x);
+            out << " <";
+            if (!m_open)
+                out << "=";
+            out << " " << nm.to_rational_string(m_val);
+        }
+    }
+    // context_t::display(out, nm, proc, m_x, m_val, is_lower(), is_open());
 }
 
 void context_t::bound::display(std::ostream & out, numeral_manager & nm, display_var_proc const & proc) {
@@ -379,6 +416,10 @@ typename context_t::bound * context_t::mk_bvar_bound(var x, bool neg, node * n, 
     n->push(r);
     TRACE("subpaving_mk_bound", tout << "mk_bound: "; display(tout, r); tout << "\ntimestamp: " << r->m_timestamp << "\n";);
     if (conflicting_bvar_bounds(x, n)) {
+        {
+            m_temp_stringstream << "conflicting bool var " << x << " bound";
+            write_debug_ss_line_to_coordinator();
+        }
         TRACE("subpaving_mk_bound", tout << "conflict\n"; display_bounds(tout, n););
         set_conflict(x, n);
     }
@@ -403,11 +444,9 @@ void context_t::adjust_integer_bound(numeral const &val, numeral &result, bool l
     if (open) {
         open = false;
         if (lower)  {
-            config_mpq::round_to_minus_inf(nm());
             nm().inc(result);
         }
         else {
-            config_mpq::round_to_plus_inf(nm());
             nm().dec(result);
         }
     }
@@ -442,6 +481,10 @@ typename context_t::bound * context_t::mk_bound(var x, numeral const & val, bool
     n->push(r);
     TRACE("subpaving_mk_bound", tout << "mk_bound: "; display(tout, r); tout << "\ntimestamp: " << r->m_timestamp << "\n";);
     if (conflicting_bounds(x, n)) {
+        {
+            m_temp_stringstream << "conflicting var " << x << " bound";
+            write_debug_ss_line_to_coordinator();
+        }
         TRACE("subpaving_mk_bound", tout << "conflict\n"; display_bounds(tout, n););
         set_conflict(x, n);
     }
@@ -466,6 +509,10 @@ void context_t::propagate_bvar_bound(var x, bool neg, node * n, justification js
     TRACE("linxi_subpaving", 
         tout << "propagate_bvar_bound: " << x << ", neg: " << neg << "\n";
     );
+    // {
+    //     m_temp_stringstream << "propagate_bvar_bound: var-"<< x << ", neg: " << neg;
+    //     write_debug_ss_line_to_coordinator();
+    // }
     bound * b = mk_bvar_bound(x, neg, n, jst);
     m_queue.push_back(b);
 }
@@ -475,7 +522,16 @@ void context_t::propagate_bound(var x, numeral const & val, bool lower, bool ope
     normalize_bound(x, val, nval, lower, open);
     if (!improve_bound(x, nval, lower, open, n))
         return;
+    
     bound * b = mk_bound(x, nval, lower, open, n, jst);
+    // {
+    //     m_temp_stringstream << "propagate_bound: var-"<< x;
+    //     write_debug_ss_line_to_coordinator();
+
+    //     // bound * lb = n->lower(id);
+    //     display(m_temp_stringstream, b);
+    //     write_debug_ss_line_to_coordinator();
+    // }
     m_queue.push_back(b);
     SASSERT(!lower || n->lower(x) == b);
     SASSERT(lower  || n->upper(x) == b);
@@ -1106,9 +1162,30 @@ void context_t::normalize_bound(var x, const numeral &val, numeral &result, bool
         tout << ", lower: " << lower
              << ", open: " << open << "\n";
     );
+    
     if (is_int(x)) {
         // adjust integer bound
+        // {
+        //     m_temp_stringstream << "before normalize";
+        //     write_debug_ss_line_to_coordinator();
+
+        //     m_temp_stringstream << "x: " << x << ", val: ";
+        //     nm().display(m_temp_stringstream, val);
+        //     m_temp_stringstream << ", lower: " << lower
+        //                         << ", open: " << open;
+        //     write_debug_ss_line_to_coordinator();
+        // }
         adjust_integer_bound(val, result, lower, open);
+        // {
+        //     m_temp_stringstream << "after normalize";
+        //     write_debug_ss_line_to_coordinator();
+
+        //     m_temp_stringstream << "x: " << x << ", val: ";
+        //     nm().display(m_temp_stringstream, result);
+        //     m_temp_stringstream << ", lower: " << lower
+        //                         << ", open: " << open;
+        //     write_debug_ss_line_to_coordinator();
+        // }
     }
     else {
         mpz &deno = m_ztmp1;
@@ -1329,10 +1406,40 @@ bool context_t::conflicting_bounds(var x, node * n) const {
 */
 lbool context_t::value(atom * t, node * n) {
     var x = t->x();
+    // {
+    //     if (x == 4903) {
+    //         // linxi: for debugging
+    //         m_temp_stringstream << "value(atom* t, node* n): x = 4903, t bool = " << t->m_bool << ", open = " << t->m_open << "\n";
+    //         m_temp_stringstream << "t = ";
+    //         t->display(m_temp_stringstream, nm(), *m_display_proc);
+    //         write_debug_ss_line_to_coordinator();
+
+    //         bound * lb = n->lower(x);
+    //         m_temp_stringstream << "x_lower: ";
+    //         if (lb == nullptr) {
+    //             m_temp_stringstream << "null";
+    //         }
+    //         else {
+    //             display(m_temp_stringstream, lb);
+    //         }
+    //         write_debug_ss_line_to_coordinator();
+
+    //         bound * ub = n->upper(x);
+    //         m_temp_stringstream << "x_upper: ";
+    //         if (ub == nullptr) {
+    //             m_temp_stringstream << "null";
+    //         }
+    //         else {
+    //             display(m_temp_stringstream, ub);
+    //         }
+    //         write_debug_ss_line_to_coordinator();
+    //     }
+    // }
     bvalue_kind bk = n->bvalue(x);
     if (t->m_bool) {
         if (t->m_open) {
             // equation
+            // x (!)= 3
             if (is_int(x) && !nm().is_int(t->value())) {
                 if (t->is_lower())
                     return l_true;
@@ -1344,11 +1451,13 @@ lbool context_t::value(atom * t, node * n) {
                 return l_undef;
             if (u != nullptr && nm().eq(u->value(), t->value()) 
                 && l != nullptr && nm().eq(l->value(), t->value())) {
+                // bound: x = 3
                 if (t->is_lower())
                     return l_false;
                 else
                     return l_true;
             }
+
             if (t->is_lower()) {
                 if (u != nullptr && (nm().lt(u->value(), t->value())
                     || (u->is_open() && nm().eq(u->value(), t->value()))))
@@ -1356,7 +1465,6 @@ lbool context_t::value(atom * t, node * n) {
                 if (l != nullptr && (nm().gt(l->value(), t->value())
                     || (l->is_open() && nm().eq(l->value(), t->value()))))
                     return l_true;
-                return l_undef;
             }
             else {
                 if (u != nullptr && (nm().lt(u->value(), t->value())
@@ -1365,8 +1473,58 @@ lbool context_t::value(atom * t, node * n) {
                 if (l != nullptr && (nm().gt(l->value(), t->value())
                     || (l->is_open() && nm().eq(l->value(), t->value()))))
                     return l_false;
-                return l_undef;
             }
+
+            // if (t->is_lower()) {
+            //     // t: x != 3
+            //     if (u != nullptr) {
+            //         if (nm().lt(u->value(), t->value())) {
+            //             // t: x != 3 and ub: x < 2 -> true
+            //             return l_true;
+            //         }
+            //         if ((u->is_open() && nm().eq(u->value(), t->value()))) {
+            //             // t: x != 3 and ub: x < 3 -> true
+            //             return l_true;
+            //         }
+            //     }
+                
+            //     if (l != nullptr) {
+            //         if (nm().gt(l->value(), t->value())) {
+            //             // t: x != 3 and lb: x > 4 -> true
+            //             return l_true;
+            //         }
+            //         if ((l->is_open() && nm().eq(l->value(), t->value()))) {
+            //             // t: x != 3 and lb: x > 3 -> true
+            //             return l_true;
+            //         }
+            //     }
+                
+            // }
+            // else {
+            //     // t: x = 3
+            //     if (u != nullptr) {
+            //         if (nm().lt(u->value(), t->value())) {
+            //             // t: x = 3 and ub: x < 2 -> false
+            //             return l_false;
+            //         }
+            //         if ((u->is_open() && nm().eq(u->value(), t->value()))) {
+            //             // t: x = 3 and ub: x < 3 -> false
+            //             return l_false;
+            //         }
+            //     }
+            //     if (l != nullptr) {
+            //         if (nm().gt(l->value(), t->value())) {
+            //             // t: x = 3 and lb: x > 4 -> false
+            //             return l_false;
+            //         }
+            //         if ((l->is_open() && nm().eq(l->value(), t->value()))) {
+            //             // t: x = 3 and lb: x > 3 -> false
+            //             return l_false;
+            //         }
+            //     }
+            // }
+
+            return l_undef;
         }
         else {
             SASSERT(bk != bvalue_kind::b_arith);
@@ -1401,6 +1559,72 @@ lbool context_t::value(atom * t, node * n) {
             else
                 return l_undef;
         }
+
+        // if (u == nullptr && l == nullptr)
+        //     return l_undef;
+        
+        // // t: x ~ 3
+        // if (t->is_lower()) {
+        //     // t: x >(=) 3
+        //     if (u != nullptr) {
+        //         // ub: x <(=)
+        //         if (nm().lt(u->value(), t->value())) {
+        //             // t: x > 3 and ub: x < 2 -> false
+        //             return l_false;
+        //         }
+        //         if ((u->is_open() || t->is_open()) && nm().eq(u->value(), t->value())) {
+        //             // only
+        //             // t: x >= 3 and ub: x <= 3
+        //             // is unknown
+        //             return l_false;
+        //         }
+        //     }
+
+        //     if (l != nullptr) {
+        //         // lb: x >(=)
+        //         if (nm().gt(l->value(), t->value())) {
+        //             // t: x > 3 and lb: x > 4 -> true
+        //             return l_true;
+        //         }
+        //         if ((l->is_open() || !t->is_open()) && nm().eq(l->value(), t->value())) {
+        //             // only
+        //             // t: x >= 3 and lb: x > 3
+        //             // is unknown
+        //             return l_true;
+        //         }
+        //     }
+        // }
+        // else {
+        //     // t: x <(=) 3
+        //     if (l != nullptr) {
+        //         // lb: x >(=)
+        //         if (nm().gt(l->value(), t->value())) {
+        //             // t: x < 3 and lb: x > 4 -> false
+        //             return l_false;
+        //         }
+        //         if ((l->is_open() || t->is_open()) && nm().eq(l->value(), t->value())) {
+        //             // only
+        //             // t: x <= 3 and lb: x >= 3
+        //             // is unknown
+        //             return l_false;
+        //         }
+        //     }
+
+        //     if (u != nullptr) {
+        //         // ub: x <(=)
+        //         if (nm().lt(u->value(), t->value())) {
+        //             // t: x < 3 and ub: x < 2 -> true
+        //             return l_true;
+        //         }
+        //         if ((u->is_open() || !t->is_open()) && nm().eq(u->value(), t->value())) {
+        //             // only
+        //             // t: x <= 3 and ub: x < 3
+        //             // is unknown
+        //             return l_true;
+        //         }
+        //     }
+        // }
+        // return l_undef;
     }
 }
 
@@ -1492,6 +1716,16 @@ void context_t::propagate_clause(clause * c, node * n) {
     c->set_visited(m_timestamp);
     unsigned sz = c->size();
     unsigned j  = UINT_MAX;
+    // {
+    //     m_temp_stringstream << "propagate_clause: ";
+    //     display(m_temp_stringstream, c);
+    //     write_debug_ss_line_to_coordinator();
+    //     for (unsigned i = 0; i < sz; i++) {
+    //         atom * at = (*c)[i];
+    //         m_temp_stringstream << " l[" << i << "] = " << value(at, n);
+    //     }
+    //     write_debug_ss_line_to_coordinator();
+    // }
     for (unsigned i = 0; i < sz; i++) {
         atom * at = (*c)[i];
         TRACE("linxi_subpaving",
@@ -1531,8 +1765,9 @@ void context_t::propagate_clause(clause * c, node * n) {
         else
             propagate_bvar_bound(a->x(), a->is_lower(), n, justification(c));
     }
-    else
+    else {
         propagate_bound(a->x(), a->value(), a->is_lower(), a->is_open(), n, justification(c));
+    }
     // A clause can propagate only once.
     // So, we can safely set its timestamp again to avoid another useless visit.
     c->set_visited(m_timestamp);
@@ -2065,10 +2300,38 @@ void context_t::write_debug_line_to_coordinator(const std::string & line) {
     std::cout << control_message::P2C::debug_info << " " << line << std::endl;
 }
 
+// void context_t::write_debug_ss_line_to_coordinator() {
+//     if (!m_partitioner_debug)
+//         return;
+//     std::string lines = m_temp_stringstream.str();
+//     std::string line;
+//     unsigned pos = 0, sz = lines.size();
+//     while (pos < sz) {
+//         unsigned next_pos = lines.find('\n', pos);
+//         if (next_pos == std::string::npos) {
+//             line = lines.substr(pos, sz - pos);
+//             pos = sz;
+//         }
+//         else {
+//             line = lines.substr(pos, next_pos - pos);
+//             pos = next_pos + 1;
+//         }
+//         write_debug_line_to_coordinator(line);
+//     }
+//     // write_debug_line_to_coordinator(m_temp_stringstream.str());
+//     m_temp_stringstream.str("");
+//     m_temp_stringstream.clear();
+// }
+
+
 void context_t::write_debug_ss_line_to_coordinator() {
     if (!m_partitioner_debug)
         return;
-    write_debug_line_to_coordinator(m_temp_stringstream.str());
+    std::istringstream iss(m_temp_stringstream.str());
+    std::string line;
+    while (std::getline(iss, line)) {
+        write_debug_line_to_coordinator(line);
+    }
     m_temp_stringstream.str("");
     m_temp_stringstream.clear();
 }
@@ -2273,6 +2536,10 @@ bool context_t::test_dominated(vector<lit> & longer_cla, vector<lit> & shorter_c
 void context_t::remove_dominated_clauses(vector<vector<lit>> & input, vector<vector<lit>> & output) {
     const unsigned max_sz_thres = 10000;
     unsigned input_sz = input.size();
+    // for (unsigned i = 0; i < input_sz; ++i) {
+    //     output.push_back(std::move(input[i]));
+    // }
+    // return;
     if (input_sz == 0 || input_sz > max_sz_thres) {
         for (unsigned i = 0; i < input_sz; ++i) {
             output.push_back(std::move(input[i]));
@@ -3307,6 +3574,8 @@ void context_t::split_node(node * n) {
             //     continue;
             if (l.m_x != id)
                 continue;
+            if (l.is_eq_lit())
+                continue;
             x_lits.push_back(l);
             // if (l.m_lower)
             //     x_lb_lits.push_back(l);
@@ -3319,8 +3588,59 @@ void context_t::split_node(node * n) {
     {
         m_temp_stringstream << "x_lits_sz: " << x_lits_sz;
         write_debug_ss_line_to_coordinator();
+        
+        m_temp_stringstream << "split var-"<< id;
+        write_debug_ss_line_to_coordinator();
+
+        bound * lb = n->lower(id);
+        m_temp_stringstream << "x_lower: ";
+        if (lb == nullptr) {
+            m_temp_stringstream << "null";
+        }
+        else {
+            display(m_temp_stringstream, lb);
+        }
+        write_debug_ss_line_to_coordinator();
+
+        bound * ub = n->upper(id);
+        m_temp_stringstream << "x_upper: ";
+        if (ub == nullptr) {
+            m_temp_stringstream << "null";
+        }
+        else {
+            display(m_temp_stringstream, ub);
+        }
+        write_debug_ss_line_to_coordinator();
     }
+
+    // {
+    //     var vid = 1856;
+    //     m_temp_stringstream << "var-"<< vid;
+    //     write_debug_ss_line_to_coordinator();
+
+    //     bound * lb = n->lower(vid);
+    //     m_temp_stringstream << "x_lower: ";
+    //     if (lb == nullptr) {
+    //         m_temp_stringstream << "null";
+    //     }
+    //     else {
+    //         display(m_temp_stringstream, lb);
+    //     }
+    //     write_debug_ss_line_to_coordinator();
+
+    //     bound * ub = n->upper(vid);
+    //     m_temp_stringstream << "x_upper: ";
+    //     if (ub == nullptr) {
+    //         m_temp_stringstream << "null";
+    //     }
+    //     else {
+    //         display(m_temp_stringstream, ub);
+    //     }
+    //     write_debug_ss_line_to_coordinator();
+    // }
+
     if (x_lits_sz > 0) {
+    // if (false) {
         // {
         //     for (const lit & l : x_lits) {
         //         m_temp_stringstream << "(" << lit_to_string(l) << ") ";
@@ -3376,10 +3696,10 @@ void context_t::split_node(node * n) {
         std::uniform_int_distribution<> dis(0, x_lits_sz - 1);
         random_id = dis(m_rand);
         lit & l = x_lits[random_id];
-        {
-            m_temp_stringstream << "split lit(left child): " << lit_to_string(l);
-            write_debug_ss_line_to_coordinator();
-        }
+        // {
+        //     m_temp_stringstream << "split lit(left child): " << lit_to_string(l);
+        //     write_debug_ss_line_to_coordinator();
+        // }
         // lit & l = x_lits[x_lits_sz >> 1];
         blower = static_cast<bool>(l.m_lower);
         bopen = static_cast<bool>(l.m_open);
@@ -3430,15 +3750,23 @@ void context_t::split_node(node * n) {
     }
     // numeral & nmid = m_tmp2;
     scoped_mpq nmid(nm());
-    
-    normalize_bound(id, mid, nmid, blower, bopen);
-    bound * lb = mk_bound(id, nmid, blower, bopen, left, justification());
+    bool nlower = blower, nopen = bopen;
+    normalize_bound(id, mid, nmid, nlower, nopen);
+    bound * lb = mk_bound(id, nmid, nlower, nopen, left, justification());
     // lb = mk_bound(id, nmid, blower, bopen, left, justification());
-
+    {
+        m_temp_stringstream << "left child bound: ";
+        display(m_temp_stringstream, lb);
+        write_debug_ss_line_to_coordinator();
+    }
     m_queue.push_back(lb);
     // add_unpropagated_bounds(n);
     propagate(left);
     if (left->inconsistent()) {
+        {
+            m_temp_stringstream << "node-" << left->id() << " is inconsistent for var-" << left->get_conflict_var();
+            write_debug_ss_line_to_coordinator();
+        }
         TRACE("subpaving_main", tout << "node #" << left->id() << " is inconsistent.\n";);
         m_temp_stringstream << control_message::P2C::new_unsat_node 
                             << " " << left->id() << " " << n->id();
@@ -3453,17 +3781,24 @@ void context_t::split_node(node * n) {
         for (unsigned i = 0, sz = left->depth(); i < sz; ++i)
             ++m_var_unsolved_split_cnt[left->split_vars()[i]];
     }
-    
-    blower = !blower;
-    bopen = !bopen;
-    normalize_bound(id, mid, nmid, blower, bopen);
-    bound * rb = mk_bound(id, nmid, blower, bopen, right, justification());
-    // rb = mk_bound(id, nmid, blower, bopen, right, justification());
 
+    nlower = !blower, nopen = !bopen;
+    normalize_bound(id, mid, nmid, nlower, nopen);
+    bound * rb = mk_bound(id, nmid, nlower, nopen, right, justification());
+    // rb = mk_bound(id, nmid, blower, bopen, right, justification());
+    {
+        m_temp_stringstream << "right child bound: ";
+        display(m_temp_stringstream, rb);
+        write_debug_ss_line_to_coordinator();
+    }
     m_queue.push_back(rb);
     // add_unpropagated_bounds(n);
     propagate(right);
     if (right->inconsistent()) {
+        // {
+        //     m_temp_stringstream << "node-" << right->id() << " is inconsistent for var-" << right->get_conflict_var();
+        //     write_debug_ss_line_to_coordinator();
+        // }
         TRACE("subpaving_main", tout << "node #" << right->id() << " is inconsistent.\n";);
         m_temp_stringstream << control_message::P2C::new_unsat_node 
                             << " " << right->id() << " " << n->id();

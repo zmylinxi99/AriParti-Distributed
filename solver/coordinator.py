@@ -697,6 +697,7 @@ class Coordinator:
             self.round_clean_up()
             
     def clean_temp_dir(self):
+        logging.info(f'Coordinator-{self.rank} clean temp dir {self.temp_dir}')
         shutil.rmtree(self.temp_dir, ignore_errors=True)
     
     def __call__(self):

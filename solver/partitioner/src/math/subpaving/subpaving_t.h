@@ -270,6 +270,7 @@ public:
         bound_array & uppers() { return m_uppers; }
         bool inconsistent() const { return m_conflict != null_var; }
         void set_conflict(var x) { SASSERT(!inconsistent()); m_conflict = x; }
+        var get_conflict_var() { SASSERT(!inconsistent()); return m_conflict; }
         bound * trail_stack() const { return m_trail; }
         bound * parent_trail_stack() const { return m_parent == nullptr ? nullptr : m_parent->m_trail; }
         bound * lower(var x) const { return bm().get(m_lowers, x); }
