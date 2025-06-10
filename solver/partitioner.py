@@ -42,13 +42,14 @@ class PartitionerStatus(Enum):
     #     return self == PartitionerStatus.error
     
 class Partitioner:
-    def __init__(self, p: subprocess.Popen):
+    def __init__(self, p: subprocess.Popen, id: int):
         self.status = PartitionerStatus.running
         self.result = PartitionerResult.unsolved
         self.partial_line = ''
         self.buffer = None
         
         self.p: subprocess.Popen = p
+        self.id = id
         
         flags = fcntl.fcntl(self.p.stdout, fcntl.F_GETFL)
         fcntl.fcntl(self.p.stdout, fcntl.F_SETFL, flags | os.O_NONBLOCK)
@@ -94,6 +95,9 @@ class Partitioner:
             # assert(False)
         self.status = PartitionerStatus.process_done
         return
+    
+    def terminate(self):
+        self.p.terminate()
     
     def send_message(self, msg: str):
         self.p.stdin.write(msg + '\n')

@@ -4,6 +4,7 @@ from collections import deque
 import logging
 import subprocess
 from enum import Enum, auto
+from partitioner import Partitioner
 
 # NodeStatus
 # waiting solving sat unsat unknown
@@ -13,16 +14,35 @@ from enum import Enum, auto
 # solving -> sat BY (solver)
 #         -> unsat BY (solver, ancester, children, partitioner)
 #         -> unknown BY (solver, children)
+
+# ParallelStatus:
+# unsolved -> simplifying -> simplified -> solving -> sat/unsat
 class NodeStatus(Enum):
+    # simplified = auto()
     unsolved = auto()
+    simplifying = auto()
+    simplified = auto()
+    solving = auto()
+    
     sat = auto()
     unsat = auto()
-    solving = auto()
     terminated = auto()
     error = auto()
     
+    # def is_simplified(self):
+    #     return self == NodeStatus.simplified
+    
     def is_unsolved(self):
         return self == NodeStatus.unsolved
+    
+    def is_simplifying(self):
+        return self == NodeStatus.simplifying
+    
+    def is_simplified(self):
+        return self == NodeStatus.simplified
+    
+    def is_solving(self):
+        return self == NodeStatus.solving
     
     def is_sat(self):
         return self == NodeStatus.sat
@@ -33,9 +53,6 @@ class NodeStatus(Enum):
     def is_solved(self):
         return self.is_sat() or self.is_unsat()
     
-    def is_solving(self):
-        return self == NodeStatus.solving
-    
     def is_terminated(self):
         return self == NodeStatus.terminated
     
@@ -43,7 +60,7 @@ class NodeStatus(Enum):
         return self == NodeStatus.error
     
     def is_ended(self):
-        return self.is_solved() or self.is_terminated()
+        return self.is_solved() or self.is_terminated() or self.is_error()
 
 class NodeReason(Enum):
     # by
@@ -71,8 +88,9 @@ class PartitionNode:
         if parent != None:
             parent: PartitionNode
             parent.children.append(self)
-        self.update_status(NodeStatus.unsolved, 
-                           NodeReason.itself, 
+        
+        self.update_status(NodeStatus.unsolved,
+                           NodeReason.itself,
                            make_time)
 
     def update_status(self, status, reason, current_time):
@@ -119,12 +137,12 @@ class PartitionTree:
         
 
 class ParallelNode(PartitionNode):
-    def __init__(self, id, parent, make_time, pid):
+    def __init__(self, id, parent, make_time):
+        self.partitioner = None
         self.assigned_coord = None
         self.unsat_percent = 0.0
-        
         super().__init__(id, parent, make_time)
-        self.pid = pid
+        
     
     def get_solve_start_time(self):
         return self.time_infos.get(NodeStatus.solving, None)
@@ -143,15 +161,15 @@ class ParallelNode(PartitionNode):
     
     def __str__(self) -> str:
         ret = super().__str__()
-        ret += f'unsat_percent: {self.unsat_percent}, pid: {self.pid}\n'
+        ret += f'unsat_percent: {self.unsat_percent}, id: {self.id}\n'
         return ret
 
 class ParallelTree(PartitionTree):
     def __init__(self, start_time):
+        self.unsolveds = deque()
+        self.simplifieds = deque()
+        self.simplifyings = []
         self.solvings = []
-        self.waitings = deque()
-        # self.endeds = []
-        self.pid2node = {}
         
         self.total_solve_time = 0.0
         self.average_solve_time = 0.0
@@ -181,34 +199,52 @@ class ParallelTree(PartitionTree):
         # elif status.is_terminated():
         #     self.sync_to_partitioner(node)
     
-    # pid: id in partitioner
-    # ppid: parent id in partitioner
-    def make_node(self, pid, ppid):
+    # id: id
+    # pid: parent id
+    def make_node(self, pid):
         id = len(self.nodes)
-        if ppid == -1:
+        if pid == -1:
             parent = None
         else:
-            parent = self.pid2node[ppid]
-        node = ParallelNode(id, parent, self.get_current_time(), pid)
+            parent = self.nodes[pid]
+        node = ParallelNode(id, parent, self.get_current_time())
         self.nodes.append(node)
-        self.pid2node[pid] = node
         if id == 0:
             self.root = node
         # logging.debug(f'parallel tree make node: {node}')
         return node
     
-    def get_next_waiting_node(self):
-        while len(self.waitings) > 0:
-            node: ParallelNode = self.waitings.popleft()
+    def get_next_unsolved_node(self):
+        while len(self.unsolveds) > 0:
+            node: ParallelNode = self.unsolveds.popleft()
             if node.status.is_unsolved():
                 return node
         return None
     
+    def get_next_simplified_node(self):
+        while len(self.simplifieds) > 0:
+            node: ParallelNode = self.simplifieds.popleft()
+            if node.status.is_simplified():
+                return node
+        return None
+    
+    def get_unsolved_number(self):
+        return len(self.unsolveds)
+    
+    def get_simplifying_number(self):
+        return len(self.simplifyings)
+    
+    def get_simplified_number(self):
+        return len(self.simplifieds)
+    
     def get_solving_number(self):
         return len(self.solvings)
     
-    # def get_ended_number(self):
-    #     return len(self.endeds)
+    def get_running_number(self):
+        return len(self.simplifyings) + len(self.solvings)
+    
+    def get_simplify_total_numner(self):
+        return len(self.simplifieds) + len(self.simplifyings)
     
     def get_node_number(self):
         return len(self.nodes)
@@ -219,7 +255,7 @@ class ParallelTree(PartitionTree):
     # precond: node is solving
     # terminate: unsolved or solving
     def terminate_node(self, node: ParallelNode, reason: NodeReason):
-        # if node.status.is_ended():
+        # if node.statsu.is_ended():
         #     return
         self.update_node_status(node, 
                     NodeStatus.terminated, 
@@ -281,14 +317,16 @@ class ParallelTree(PartitionTree):
     def propagate_node_unsat(self,
             node: ParallelNode,
             reason: NodeReason):
+        if node.status.is_simplifying():
+            node.partitioner.terminate()
+            node.partitioner = None
+        elif node.status.is_solving():
+            node.assign_to.terminate()
+            node.assign_to = None
+        
         self.update_node_status(node, 
                                 NodeStatus.unsat, 
                                 reason)
-        
-        # self.write_line_to_partitioner(f'unsat-node {t.id}')
-        if node.assign_to != None:
-            node.assign_to.terminate()
-            node.assign_to = None
     
     def update_node_unsat_percent(self, node: ParallelNode):
         current = node
@@ -334,6 +372,14 @@ class ParallelTree(PartitionTree):
                 NodeStatus.sat, reason)
         self.result = NodeStatus.sat
     
+    def node_simplified(self, 
+            node: ParallelNode):
+        self.update_node_status(node,
+                NodeStatus.simplified, NodeReason.partitioner)
+        self.unsolveds.append(node.children[0])
+        self.unsolveds.append(node.children[1])
+        self.simplifieds.append(node)
+    
     def node_solved(self, 
             node: ParallelNode,
             status: NodeStatus,
@@ -346,8 +392,18 @@ class ParallelTree(PartitionTree):
         else:
             assert(False)
     
+    def simplify_split_node(self, node: ParallelNode, p: subprocess.Popen):
+        assert(node.assign_to == None)
+        assert(node.status.is_unsolved())
+        node.partitioner = Partitioner(p, node.id)
+        node.update_status(NodeStatus.simplifying,
+                           NodeReason.itself,
+                           self.get_current_time())
+        self.simplifyings.append(node)
+    
     def assign_node(self, node: ParallelNode, p: subprocess.Popen):
         assert(node.assign_to == None)
+        assert(node.status.is_simplified())
         node.assign_to = p
         node.update_status(NodeStatus.solving,
                            NodeReason.itself,
@@ -383,9 +439,9 @@ class DistributedNode(PartitionNode):
         super().__init__(id, parent, make_time)
         ### TBD ###
     
-    def update_status(self, status, reason, current_time):
-        super().update_status(status, reason, current_time)
-        ### TBD ###
+    # def update_status(self, status, reason, current_time):
+    #     super().update_status(status, reason, current_time)
+    #     ### TBD ###
     
     def update_partial_status(self, partial_status):
         self.partial_status = partial_status
@@ -471,6 +527,7 @@ class DistributedTree(PartitionTree):
             # bfs, dfs
             # node, depth = stack.popleft()
             node, depth = stack.pop()
+            node: DistributedNode
             logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
             for child in node.children:
                 stack.append((child, depth + 1))

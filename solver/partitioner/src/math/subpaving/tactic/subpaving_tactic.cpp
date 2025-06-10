@@ -72,8 +72,12 @@ class subpaving_tactic : public tactic {
         subpaving::task_info            m_task;
         expr_ref_buffer                 m_expr_buffer;
         expr_ref_vector                 m_task_expr_clauses;
+        expr *                          m_left_child_expr;
+        expr *                          m_right_child_expr;
+        unsigned                        m_root_task_id;
+        unsigned                        m_child_task_id;
         std::string                     m_output_dir;
-        unsigned                        m_max_running_tasks;
+        // unsigned                        m_max_running_tasks;
         bool                            m_get_model_flag;
         unsigned m_int_var_num;
         unsigned m_nl_val_num;
@@ -426,6 +430,9 @@ class subpaving_tactic : public tactic {
                         << mk_smt_pp(m_task_expr_clauses[i].get(), m()) << "\n";
                 }
             );
+
+            m_left_child_expr = convert_lit_to_expr(m_task.m_split_left_child);
+            m_right_child_expr = convert_lit_to_expr(m_task.m_split_right_child);
         }
 
         // output current subtask to .smt2 file
@@ -457,58 +464,156 @@ class subpaving_tactic : public tactic {
                 }
                 return;
             }
-            std::string task_name;
+
+            
+            
+            // root task
             {
                 std::stringstream ss;
-                ss << "task-" << m_task.m_node_id;
-                task_name = ss.str();
+                ss << "task-" << m_root_task_id;
+                std::ofstream ofs(m_output_dir + "/" + ss.str() + "-simplified.smt2");
+                ast_smt_pp pp(m());
+                pp.set_benchmark_name(ss.str().c_str());
+                pp.set_logic(m_logic);
+                --sz;
+                for (unsigned i = 0; i < sz; ++i) {
+                    pp.add_assumption(m_task_expr_clauses[i].get());
+                }
+                pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
+                if (m_get_model_flag) {
+                    ofs << "(get-model)\n";
+                }
             }
-            std::ofstream ofs(m_output_dir + "/" + task_name + ".smt2");
+            // std::cout << "0 " << "111111111111\n";
             
-            ast_smt_pp pp(m());
-            pp.set_benchmark_name(task_name.c_str());
-            pp.set_logic(m_logic);
+            // left child
+            {
 
-            --sz;
-            for (unsigned i = 0; i < sz; ++i) {
-                pp.add_assumption(m_task_expr_clauses[i].get());
+                std::stringstream ss;
+                ss << "task-" << m_child_task_id;
+                std::ofstream ofs(m_output_dir + "/" + ss.str() + ".smt2");
+                ast_smt_pp pp(m());
+                pp.set_benchmark_name(ss.str().c_str());
+                pp.set_logic(m_logic);
+                for (unsigned i = 0; i < sz; ++i) {
+                    pp.add_assumption(m_task_expr_clauses[i].get());
+                }
+                pp.display_smt2(ofs, m_left_child_expr);
+                if (m_get_model_flag) {
+                    ofs << "(get-model)\n";
+                }
             }
+            // std::cout << "0 " << "22222222222222\n";
+
+            // right child
+            {
+                std::stringstream ss;
+                ss << "task-" << (m_child_task_id + 1);
+                std::ofstream ofs(m_output_dir + "/" + ss.str() + ".smt2");
+                ast_smt_pp pp(m());
+                pp.set_benchmark_name(ss.str().c_str());
+                pp.set_logic(m_logic);
+                for (unsigned i = 0; i < sz; ++i) {
+                    pp.add_assumption(m_task_expr_clauses[i].get());
+                }
+                pp.display_smt2(ofs, m_right_child_expr);
+                if (m_get_model_flag) {
+                    ofs << "(get-model)\n";
+                }
+            }
+            // std::cout << "0 " << "333333333333333\n";
+
+            // m_task_expr_clauses.reset();
+
+            // std::string task_name;
+            // std::ofstream ofs;
             
-            pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
-            if (m_get_model_flag) {
-                ofs << "(get-model)\n";
-            }
-            m_task_expr_clauses.reset();
+            // // root task
+            // {
+            //     std::stringstream ss;
+            //     ss << "task-" << m_root_task_id;
+            //     task_name = ss.str();
+            // }
+            // ofs.open(m_output_dir + "/" + task_name + "-simplified.smt2");
+            // ast_smt_pp pp(m());
+            // pp.set_benchmark_name(task_name.c_str());
+            // pp.set_logic(m_logic);
+
+            // --sz;
+            // for (unsigned i = 0; i < sz; ++i) {
+            //     pp.add_assumption(m_task_expr_clauses[i].get());
+            // }
+            // pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
+            // if (m_get_model_flag) {
+            //     ofs << "(get-model)\n";
+            // }
+            
+            // // left child
+            // {
+            //     std::stringstream ss;
+            //     ss << "task-" << m_child_task_id;
+            //     task_name = ss.str();
+            // }
+            
+            // std::cout << "0 " << (m_output_dir + "/" + task_name + ".smt2") << "\n";
+            // ofs.open(m_output_dir + "/" + task_name + ".smt2");
+            // pp.add_assumption(m_task_expr_clauses[sz].get());
+            // pp.display_smt2(ofs, m_left_child_expr);
+            // if (m_get_model_flag) {
+            //     ofs << "(get-model)\n";
+            // }
+
+            // // right child
+            // {
+            //     std::stringstream ss;
+            //     ss << "task-" << (m_child_task_id + 1);
+            //     task_name = ss.str();
+            // }
+            // ofs.open(m_output_dir + "/" + task_name + ".smt2");
+            // pp.add_assumption(m_task_expr_clauses[sz].get());
+            // pp.display_smt2(ofs, m_right_child_expr);
+            // if (m_get_model_flag) {
+            //     ofs << "(get-model)\n";
+            // }
+
+            // m_task_expr_clauses.reset();
         }
         
         lbool solve() {
             lbool res;
-            while (true) {
-                try {
-                    res = (*m_ctx)();
-                }
-                catch (const subpaving::exception &) {
-                    throw tactic_exception("failed building subpaving tree...");
-                }
-                // l_false: unsat
-                if (res == l_false)
-                    return l_false;
-                // l_undef: 
-                //   1. time up. or
-                //   2. all splits have been exhausted.
-                if (res == l_undef)
-                    break;
-                // l_sat: generate task successfully
-                display_current_task();
+            try {
+                res = (*m_ctx)();
             }
+            catch (const subpaving::exception &) {
+                throw tactic_exception("failed building subpaving tree...");
+            }
+            // l_false: unsat
+            if (res == l_false)
+                return l_false;
+            // l_undef: 
+            //   1. time up. or
+            //   2. all splits have been exhausted.
+            if (res == l_undef)
+                return l_undef;
+            // l_sat: generate task successfully
+            display_current_task();
             return l_undef;
         }
 
         void get_params() {
             const params_ref &p = gparams::get_ref();
             m_output_dir = p.get_str("output_dir", "ERROR");
-            m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
+            // m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
+            
+            m_root_task_id = p.get_uint("root_task_id", 0);
+            m_child_task_id = p.get_uint("child_task_id", 0);
             m_get_model_flag = static_cast<bool>(p.get_uint("get_model_flag", 0));
+            // std::cout << "0 " << "m_root_task_id " << m_root_task_id << "\n";
+            // std::cout << "0 " << "m_child_task_id " << m_child_task_id << "\n";
+            if (m_parti_debug) {
+                std::cout << "0 " << "m_root_task_id " << m_root_task_id << "\n";
+                std::cout << "0 " << "m_child_task_id " << m_child_task_id << "\n";
+            }
         }
 
         void process(goal_ref const & g, 
@@ -531,6 +636,7 @@ class subpaving_tactic : public tactic {
                 // }
                 get_params();
                 if (m_parti_debug) {
+                    std::cout << "0 " << "subpaving internalize\n";
                     std::cout << "0 " << "subpaving internalize\n";
                 }
                 internalize(*g);

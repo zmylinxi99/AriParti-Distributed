@@ -826,8 +826,8 @@ private:
     bool                m_parti_debug;
     std::string         m_output_dir;
     
-    unsigned            m_max_running_tasks;
-    unsigned            m_max_alive_tasks;
+    // unsigned            m_max_running_tasks;
+    // unsigned            m_max_alive_tasks;
     
     unsigned            m_read_buffer_len;
     char *              m_read_buffer;

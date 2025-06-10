@@ -41,9 +41,11 @@ void env_params::collect_param_descrs(param_descrs & d) {
     d.insert("memory_max_alloc_count", CPK_UINT, "set hard upper limit for memory allocations, if 0 then there is no limit", "0");
     d.insert("memory_high_watermark", CPK_UINT, "set high watermark for memory consumption (in bytes), if 0 then there is no limit", "0");
     d.insert("memory_high_watermark_mb", CPK_UINT, "set high watermark for memory consumption (in megabytes), if 0 then there is no limit", "0");
-
+    
     d.insert("output_dir", CPK_STRING, "AriParti output dir", "ERROR");
-    d.insert("partition_max_running_tasks", CPK_UINT, "AriParti maximum number of tasks running simultaneously", "32");
+    // d.insert("partition_max_running_tasks", CPK_UINT, "AriParti maximum number of tasks running simultaneously", "32");
+    d.insert("root_task_id", CPK_UINT, "AriParti root task id", "0");
+    d.insert("child_task_id", CPK_UINT, "AriParti child task id", "0");
     d.insert("partition_rand_seed", CPK_UINT, "AriParti random seed", "0");
     d.insert("get_model_flag", CPK_UINT, "AriParti get model flag", "0");
 }

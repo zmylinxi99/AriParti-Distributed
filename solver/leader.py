@@ -230,7 +230,7 @@ class Leader:
         dest_path = f'{self.temp_folder_path}/Coordinator-0/tasks/round-0'
         os.makedirs(dest_path, exist_ok=True)
         shutil.copyfile(src_task_path, 
-                        f'{dest_path}/task-root.smt2')
+                        f'{dest_path}/task-0.smt2')
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node, 
                             dest=0, tag=1)
         return False
@@ -239,7 +239,7 @@ class Leader:
         src_coord = self.isolated_rank
         src_path  = self.input_file_path
         dest_pre_path = f'{self.temp_folder_path}/Coordinator-{src_coord}/tasks/round-0'
-        dest_path = f'{dest_pre_path}/task-root.smt2'
+        dest_path = f'{dest_pre_path}/task-0.smt2'
         os.makedirs(dest_pre_path, exist_ok=True)
         shutil.copyfile(src_path, dest_path)
         MPI.COMM_WORLD.send(ControlMessage.L2C.assign_node,

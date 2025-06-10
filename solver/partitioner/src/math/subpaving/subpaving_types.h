@@ -55,6 +55,8 @@ struct task_info {
     unsigned m_undef_clause_num;
     vector<vector<lit>> m_clauses;
     vector<lit> m_var_bounds;
+    lit m_split_left_child;
+    lit m_split_right_child;
     
     void reset() {
         m_node_id = UINT32_MAX;

@@ -2408,8 +2408,8 @@ void context_t::init_partition() {
         m_temp_stringstream << "output dir: " << m_output_dir;
         write_debug_ss_line_to_coordinator();
     }
-    m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
-    m_max_alive_tasks = static_cast<unsigned>(m_max_running_tasks * 1.2) + 2;
+    // m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
+    // m_max_alive_tasks = static_cast<unsigned>(m_max_running_tasks * 1.2) + 2;
     
     nm().set(m_tmp1, 1); // numerator
     nm().set(m_tmp2, 4); // denominator
@@ -3312,7 +3312,7 @@ void context_t::select_best_var(node * n) {
             continue;
         unsigned split_cnt = m_var_unsolved_split_cnt[x];
         double avg_split_cnt = 
-            static_cast<double>(split_cnt) / static_cast<double>(m_unsolved_task_num);
+            static_cast<double>(split_cnt) / static_cast<double>(m_unsolved_task_num + 1);
         // double choose_prob = pow(m_split_prob_decay, avg_split_cnt);
         // if (split_cnt > 0) {
         //     m_temp_stringstream << "var " << x << ", avg_split_cnt: " << avg_split_cnt
@@ -3493,11 +3493,11 @@ void context_t::communicate_with_coordinator() {
         write_debug_line_to_coordinator("read line from coordinator: " + m_current_line);
         parse_line(m_current_line);
         m_current_line = "";
-        {
-            m_temp_stringstream << "alive tasks: "<< m_alive_task_num
-                << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
-            write_debug_ss_line_to_coordinator();
-        }
+        // {
+        //     m_temp_stringstream << "alive tasks: "<< m_alive_task_num
+        //         << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
+        //     write_debug_ss_line_to_coordinator();
+        // }
     }
 }
 
@@ -3613,32 +3613,6 @@ void context_t::split_node(node * n) {
         write_debug_ss_line_to_coordinator();
     }
 
-    // {
-    //     var vid = 1856;
-    //     m_temp_stringstream << "var-"<< vid;
-    //     write_debug_ss_line_to_coordinator();
-
-    //     bound * lb = n->lower(vid);
-    //     m_temp_stringstream << "x_lower: ";
-    //     if (lb == nullptr) {
-    //         m_temp_stringstream << "null";
-    //     }
-    //     else {
-    //         display(m_temp_stringstream, lb);
-    //     }
-    //     write_debug_ss_line_to_coordinator();
-
-    //     bound * ub = n->upper(vid);
-    //     m_temp_stringstream << "x_upper: ";
-    //     if (ub == nullptr) {
-    //         m_temp_stringstream << "null";
-    //     }
-    //     else {
-    //         display(m_temp_stringstream, ub);
-    //     }
-    //     write_debug_ss_line_to_coordinator();
-    // }
-
     if (x_lits_sz > 0) {
     // if (false) {
         // {
@@ -3753,34 +3727,20 @@ void context_t::split_node(node * n) {
     bool nlower = blower, nopen = bopen;
     normalize_bound(id, mid, nmid, nlower, nopen);
     bound * lb = mk_bound(id, nmid, nlower, nopen, left, justification());
-    // lb = mk_bound(id, nmid, blower, bopen, left, justification());
     {
         m_temp_stringstream << "left child bound: ";
         display(m_temp_stringstream, lb);
         write_debug_ss_line_to_coordinator();
     }
-    m_queue.push_back(lb);
-    // add_unpropagated_bounds(n);
-    propagate(left);
-    if (left->inconsistent()) {
-        {
-            m_temp_stringstream << "node-" << left->id() << " is inconsistent for var-" << left->get_conflict_var();
-            write_debug_ss_line_to_coordinator();
-        }
-        TRACE("subpaving_main", tout << "node #" << left->id() << " is inconsistent.\n";);
-        m_temp_stringstream << control_message::P2C::new_unsat_node 
-                            << " " << left->id() << " " << n->id();
-        write_ss_line_to_coordinator();
-        remove_from_leaf_dlist(left);
-        m_nodes_state[left->id()] = node_state::UNSAT;
-    }
-    else {
-        m_leaf_heap.emplace(left->id(), m_ptask->m_depth, 
-            m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
-        ++m_unsolved_task_num;
-        for (unsigned i = 0, sz = left->depth(); i < sz; ++i)
-            ++m_var_unsolved_split_cnt[left->split_vars()[i]];
-    }
+
+    lit & lc = m_ptask->m_split_left_child;
+    lc.m_x = id;
+    lc.m_bool = false;
+
+    lc.m_int = m_is_int[id];
+    lc.m_open = lb->m_open;
+    lc.m_lower = lb->m_lower;
+    lc.m_val = &(lb->m_val);
 
     nlower = !blower, nopen = !bopen;
     normalize_bound(id, mid, nmid, nlower, nopen);
@@ -3791,28 +3751,22 @@ void context_t::split_node(node * n) {
         display(m_temp_stringstream, rb);
         write_debug_ss_line_to_coordinator();
     }
-    m_queue.push_back(rb);
-    // add_unpropagated_bounds(n);
-    propagate(right);
-    if (right->inconsistent()) {
-        // {
-        //     m_temp_stringstream << "node-" << right->id() << " is inconsistent for var-" << right->get_conflict_var();
-        //     write_debug_ss_line_to_coordinator();
-        // }
-        TRACE("subpaving_main", tout << "node #" << right->id() << " is inconsistent.\n";);
-        m_temp_stringstream << control_message::P2C::new_unsat_node 
-                            << " " << right->id() << " " << n->id();
-        write_ss_line_to_coordinator();
-        remove_from_leaf_dlist(right);
-        m_nodes_state[right->id()] = node_state::UNSAT;
-    }
-    else {
-        m_leaf_heap.emplace(right->id(), m_ptask->m_depth, 
-            m_ptask->m_undef_clause_num, m_ptask->m_undef_lit_num);
-        ++m_unsolved_task_num;
-        for (unsigned i = 0, sz = right->depth(); i < sz; ++i)
-            ++m_var_unsolved_split_cnt[right->split_vars()[i]];
-    }
+
+    // lit & lc = m_ptask->m_split_left_child;
+    // lc.m_x = id;
+    // lc.m_bool = false;
+
+    // lc.m_int = m_is_int[id];
+    // lc.m_open = lb->m_open;
+    // lc.m_lower = lb->m_lower;
+    // lc.m_val = &(lb->m_val);
+    lit & rc = m_ptask->m_split_right_child;
+    rc.m_x = id;
+    rc.m_bool = false;
+    rc.m_int = m_is_int[id];
+    rc.m_open = rb->m_open;
+    rc.m_lower = rb->m_lower;
+    rc.m_val = &(rb->m_val);
 }
 
 bool context_t::create_new_task() {
@@ -3878,8 +3832,8 @@ bool context_t::create_new_task() {
         //     }
         // }
         {
-            m_temp_stringstream << "alive tasks: "<< m_alive_task_num
-                << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
+            // m_temp_stringstream << "alive tasks: "<< m_alive_task_num
+            //     << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();
             write_debug_ss_line_to_coordinator();
             if (m_disj_simplified_cnt > 0) {
                 m_temp_stringstream << "node-" << n->id() << " m_disj_simplified_cnt (logic or): " << m_disj_simplified_cnt;
@@ -3902,63 +3856,29 @@ bool context_t::create_new_task() {
 // BICP and arithmetic partitioning start here
 lbool context_t::operator()() {
     TRACE("linxi_subpaving", tout << "operator()\n");
-    if (!m_init) {
-        init_partition();
-        init();
-        if (m_root->inconsistent()) {
-            // unsat
-            remove_from_leaf_dlist(m_root);
-            return l_false;
-        }
-        propagate(m_root);
-        if (m_root->inconsistent()) {
-            // unsat
-            remove_from_leaf_dlist(m_root);
-            return l_false;
-        }
-        m_leaf_heap.emplace(0, 0, 0, 0);
-        ++m_unsolved_task_num;
-        // for (unsigned i = 0, sz = m_root->depth(); i < sz; ++i)
-        //     ++m_var_unsolved_split_cnt[m_root->split_vars()[i]];
+    init_partition();
+    init();
+    if (m_root->inconsistent()) {
+        // unsat
+        return l_false;
     }
-    unsigned nid = m_ptask->m_node_id;
-    if (nid != UINT32_MAX) {
-        ++m_alive_task_num;
-        node * n = m_nodes[nid];
-        node * pa = n->parent();
-        int pid = -1;
-        if (pa != nullptr)
-            pid = static_cast<int>(pa->id());
-        m_temp_stringstream << control_message::P2C::new_unknown_node 
-                            << " " << nid << " " << pid;
-        write_ss_line_to_coordinator();
-        m_nodes_state[nid] = node_state::WAITING;
-        // ++m_unsolved_task_num;
-        // for (unsigned i = 0, sz = n->depth(); i < sz; ++i)
-        //     ++m_var_unsolved_split_cnt[n->split_vars()[i]];
-        split_node(m_nodes[nid]);
-        m_ptask->reset();
+    propagate(m_root);
+    if (m_root->inconsistent()) {
+        // unsat
+        return l_false;
+    }
+    // for (unsigned i = 0, sz = m_root->depth(); i < sz; ++i)
+    //     ++m_var_unsolved_split_cnt[m_root->split_vars()[i]];
+    // create_new_task();
+
+    bool is_unsat = convert_node_to_task(m_root);
+    if (is_unsat) {
+        // unsat
+        return l_false;
     }
 
-    while (true) {
-        communicate_with_coordinator();
-        if (m_alive_task_num > m_max_alive_tasks) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
-        }
-        if (create_new_task()) {
-            return l_true;
-        }
-        else {
-            if (m_alive_task_num > 0)
-                return l_undef;
-            else
-                return l_false;
-        }
-    }
-
-    TRACE("subpaving_stats", statistics st; collect_statistics(st); tout << "statistics:\n"; st.display_smt2(tout););
-    return l_undef;
+    split_node(m_root);
+    return l_true;
 }
 
 void context_t::display_bounds(std::ostream & out) const {

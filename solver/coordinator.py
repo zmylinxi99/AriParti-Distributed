@@ -40,7 +40,6 @@ class CoordinatorStatus(Enum):
 
 class Coordinator:
     def __init__(self):
-        self.partitioner = None
         self.solving_round = 0
         # terminate on demand
         # self.terminate_threshold = [1200.0, 200.0, 100.0]
@@ -52,6 +51,11 @@ class Coordinator:
         self.isolated_rank = self.leader_rank - 1
         self.num_dist_coords = self.isolated_rank
         self.init_params()
+        
+        if self.rank != self.isolated_rank:
+            self.parti_seed = 0
+        else:
+            self.parti_seed = 1
         
         if self.get_model_flag:
             self.model = ''
@@ -69,7 +73,6 @@ class Coordinator:
         self.result = NodeStatus.unsolved
         
         self.original_process = None
-        self.partitioner = None
         self.tree = None
         
         logging.debug(f'rank: {self.rank}, leader_rank: {self.leader_rank}')
@@ -147,84 +150,56 @@ class Coordinator:
     def write_line_to_log(self, data: str):
         logging.info(data)
     
-    def process_partitioner_msg(self, msg: str):
+    def process_partitioner_msg(self, partitioner: Partitioner, msg: str):
         words = msg.split(' ')
         if words[0] in ['sat', 'unsat', 'unknown']:
             result = words[0]
-            self.partitioner.set_result(result)
+            logging.debug(f'partitioner-result {result}')
+            partitioner.set_result(result)
             if result == 'sat':
                 self.result = NodeStatus.sat
-            elif result == 'unsat':
-                self.result = NodeStatus.unsat
-            elif result == 'unknown':
-                if self.tree.get_node_number() == 0:
-                    raise_error('Partitioner error')
-                    # assert(False)
-                    # MPI.COMM_WORLD.Abort()
-            else:
-                assert(False)
-        else:
-            op = ControlMessage.P2C(int(words[0]))
-            if op.is_debug_info():
-                # remains = ' '.join(words[1: ])
-                # logging.debug(f'partitioner-debug-info {remains}')
-                pass
-            elif op.is_new_node():
-                pid = int(words[1])
-                ppid = int(words[2])
-                node = self.tree.make_node(pid, ppid)
-                if op.is_new_unsat_node():
-                    self.tree.node_solved_unsat(node,
-                            NodeReason.partitioner)
-                    if self.is_done():
-                        return
-                elif node.parent != None and node.parent.status.is_unsat():
-                    self.tree.node_solved_unsat(node,
-                            NodeReason.ancester)
-                else:
-                    self.tree.waitings.append(node)
-                # if pid % 10 == 0:
-                #     self.log_tree_infos()
-                self.log_tree_infos()
-                ### TBD ###
-            else:
-                assert(False)
+            return
+        
+        op = ControlMessage.P2C(int(words[0]))
+        assert(op.is_debug_info())
+        remains = ' '.join(words[1: ])
+        logging.debug(f'{op} {partitioner.id} {remains}')
     
-    def receive_partitioner_messages_limited(self):
+    def receive_partitioner_messages_limited(self, partitioner: Partitioner):
         cnt = 0
-        while not self.partitioner.is_receive_done():
+        while not partitioner.is_receive_done():
             if cnt >= 32:
                 break
             cnt += 1
-            msg = self.partitioner.receive_message()
-            # logging.debug(f'partitioner-status {self.partitioner.status}')
+            msg = partitioner.receive_message()
+            # logging.debug(f'partitioner-status {partitioner.status}')
             # logging.debug(f'partitioner-message {msg}')
             if msg == None:
                 break
             if msg == '':
                 continue
-            logging.debug(f'partitioner-message {msg}')
-            if self.get_model_flag and self.partitioner.result.is_sat():
-                self.model += msg + '\n'
+            # logging.debug(f'partitioner-message {msg}')
+            if self.get_model_flag and partitioner.result.is_sat():
+                self.model += f'{msg}\n'
             else:
-                self.process_partitioner_msg(msg)
-        if self.get_model_flag and self.partitioner.is_receive_done():
+                self.process_partitioner_msg(partitioner, msg)
+        if self.get_model_flag and partitioner.is_receive_done():
             self.get_model_done = True
     
-    def receive_partitioner_messages(self):
-        if self.partitioner.is_receive_done():
+    def check_partitioner_status(self, partitioner: Partitioner):
+        if partitioner.is_receive_done():
             return
-        self.partitioner.check_running()
+        partitioner.check_running()
         while True:
             # logging.debug(f'partitioner-status {self.partitioner.status}')
-            self.receive_partitioner_messages_limited()
+            self.receive_partitioner_messages_limited(partitioner)
             # running: break
             # process_done: loop until receive_done
             # receive_done: break
-            if not self.partitioner.is_process_done():
+            if not partitioner.is_process_done():
                 break
     
-    def check_subprocess_status(self, p: subprocess.Popen):
+    def check_base_solver_status(self, p: subprocess.Popen):
         rc = p.poll()
         if rc == None:
             return NodeStatus.solving
@@ -260,23 +235,6 @@ class Coordinator:
             logging.error(f'stderr: {err_data}')
             return NodeStatus.error
             # raise_error(f'subprocess error state: {sta}')
-    
-    def send_partitioner_message(self, msg: str):
-        logging.debug(f'send_partitioner_message: {msg}')
-        if not self.partitioner.check_running():
-            logging.debug(f'send_partitioner_message failed for partitioner is not running')
-            # logging.debug(f'failed')
-            return
-        # logging.debug(f'succeed')
-        self.partitioner.send_message(msg)
-    
-    def sync_ended_to_partitioner(self, node: ParallelNode, status: NodeStatus):
-        if status.is_unsat():
-            sta_val = ControlMessage.C2P.unsat_node.value
-        else:
-            sta_val = ControlMessage.C2P.terminate_node.value
-        msg = f'{sta_val} {node.pid}'
-        self.send_partitioner_message(msg)
     
     def need_terminate(self, node: ParallelNode):
         if node.id == 0:
@@ -314,13 +272,43 @@ class Coordinator:
             return
         logging.info(f'terminate node-{node.id}')
         self.tree.terminate_node(node, NodeReason.coordinator)
-        self.sync_ended_to_partitioner(node, NodeStatus.terminated)
     
-    # True for still running
+    # True for still simplifying
+    def check_simplifying_status(self, node: ParallelNode):
+        # logging.debug(f'check_simplifying_status: node-{node.id}')
+        if not node.status.is_simplifying():
+            return False
+        partitioner: Partitioner = node.partitioner
+        self.check_partitioner_status(partitioner)
+        if partitioner.status.is_running():
+            return True
+        assert(partitioner.status.is_receive_done())
+        pres = partitioner.result
+        logging.info(f'simplified: node-{node.id} is {pres}')
+        node.partitioner = None
+        if pres.is_sat():
+            sta = NodeStatus.sat
+        elif pres.is_unsat():
+            sta = NodeStatus.unsat
+        elif pres.is_unknown():
+            sta = NodeStatus.simplified
+        else:
+            assert(False)
+        
+        if sta.is_simplified():
+            self.tree.node_simplified(node)
+        else:
+            self.tree.node_solved(node, sta, NodeReason.partitioner)
+        
+        self.log_tree_infos()
+        return False
+    
+    # True for still solving
     def check_solving_status(self, node: ParallelNode):
+        # logging.debug(f'check_solving_status: node-{node.id}')
         if not node.status.is_solving():
             return False
-        sta: NodeStatus = self.check_subprocess_status(node.assign_to)
+        sta: NodeStatus = self.check_base_solver_status(node.assign_to)
         if sta.is_error():
             self.terminate_node(node)
             return False
@@ -334,10 +322,6 @@ class Coordinator:
         logging.info(f'solved: node-{node.id} is {sta}')
         self.tree.node_solved(node, sta)
         self.log_tree_infos()
-        if self.is_done():
-            return False
-        assert(sta.is_unsat())
-        self.sync_ended_to_partitioner(node, NodeStatus.unsat)
         return False
     
     def solve_task(self, task_tag: str):
@@ -354,60 +338,99 @@ class Coordinator:
             )
         return p
     
-    def solve_node(self, node: ParallelNode):
-        p = self.solve_task(f'{node.pid}')
+    def solve_simplified_task(self, node: ParallelNode):
+        p = self.solve_task(f'{node.id}-simplified')
         self.tree.assign_node(node, p)
-        logging.debug(f'solve-node {node.id} with pid {node.pid}')
+        logging.debug(f'solve-node {node.id}')
     
-    def check_solvings_status(self):
-        still_solvings = [] 
-        for node in self.tree.solvings:
+    def check_runnings_status(self, runnings: list, running_status: NodeStatus, check_func):
+        # logging.debug(f'check_runnings_status: {len(runnings)}')
+        still_runnings = []
+        for node in runnings:
             node: ParallelNode
-            if not node.status.is_solving():
+            if node.status != running_status:
                 continue
-            if self.check_solving_status(node):
-                still_solvings.append(node)
+            if check_func(node):
+                still_runnings.append(node)
             else:
                 if self.is_done():
                     return True
-        self.tree.solvings = still_solvings
+        runnings[:] = still_runnings
         return False
     
-    def log_tree_infos(self):
-        logging.debug(f'nodes: {self.tree.get_node_number()}, '
-                      f'solvings: {self.tree.get_solving_number()}({self.available_cores}), '
-                      f'solved: {self.tree.update_dict.get((NodeStatus.unsat, NodeReason.itself), 0)}(itself), '
-                      f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.children), 0)}(children), '
-                      f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.ancester), 0)}(ancester), '
-                      f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.partitioner), 0)}(partitioner), '
-                      f'progress: {self.tree.root.unsat_percent * 100.0 :.2f}%'
-                    #   f'endeds: {self.tree.get_ended_number()}, '
-                    #   f'unendeds: {self.tree.get_unended_number()}'
+    def check_simplifyings_status(self):
+        return self.check_runnings_status(
+                    self.tree.simplifyings,
+                    NodeStatus.simplifying,
+                    self.check_simplifying_status
                 )
     
-    # run waitings by:
-    # currently: generation order
-    # can be easily change to: priority select
-    def run_waiting_tasks(self):
-        while len(self.tree.solvings) < self.available_cores:
-            node = self.tree.get_next_waiting_node()
-            if node == None:
-                break
-            self.solve_node(node)
+    def check_solvings_status(self):
+        return self.check_runnings_status(
+                    self.tree.solvings,
+                    NodeStatus.solving,
+                    self.check_solving_status
+                )
     
-    # run the partitioner
-    def run_partitioner(self):
-        if self.rank != self.isolated_rank:
-            parti_seed = 0
-        else:
-            parti_seed = 1
-        # parti_seed = self.rank
-        
+    # def check_simplifyings_status(self):
+    #     still_simplifyings = [] 
+    #     for node in self.tree.simplifyings:
+    #         node: ParallelNode
+    #         if not node.status.is_simplifying():
+    #             continue
+    #         if self.check_simplifying_status(node):
+    #             still_simplifyings.append(node)
+    #         else:
+    #             if self.is_done():
+    #                 return True
+    #     self.tree.simplifyings = still_simplifyings
+    #     return False
+    
+    # def check_solvings_status(self):
+    #     still_solvings = [] 
+    #     for node in self.tree.solvings:
+    #         node: ParallelNode
+    #         if not node.status.is_solving():
+    #             continue
+    #         if self.check_solving_status(node):
+    #             still_solvings.append(node)
+    #         else:
+    #             if self.is_done():
+    #                 return True
+    #     self.tree.solvings = still_solvings
+    #     return False
+    
+    def log_tree_infos(self):
+        logging.debug(
+            f'nodes: {self.tree.get_node_number()}, '
+            f'runnings: {self.tree.get_running_number()}({self.available_cores}), '
+            f'simplifyings: {self.tree.get_simplifying_number()}, '
+            f'solvings: {self.tree.get_solving_number()}'
+        )
+        logging.debug(
+            f'unsolved: {self.tree.get_unsolved_number()}({self.available_cores}), '
+            f'simplified: {self.tree.get_simplified_number()}'
+        )
+        logging.debug(
+            f'solved: {self.tree.update_dict.get((NodeStatus.unsat, NodeReason.itself), 0)}(itself), '
+            f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.children), 0)}(children), '
+            f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.ancester), 0)}(ancester), '
+            f'{self.tree.update_dict.get((NodeStatus.unsat, NodeReason.partitioner), 0)}(partitioner), '
+            f'progress: {self.tree.root.unsat_percent * 100.0 :.2f}%'
+            # f'endeds: {self.tree.get_ended_number()}, '
+            # f'unendeds: {self.tree.get_unended_number()}'
+        )
+    
+    def simplify_split_task(self, node: ParallelNode):
+        left_child = self.tree.make_node(node.id)
+        right_child = self.tree.make_node(node.id)
+        assert(left_child.id + 1 == right_child.id)
         cmd =  [self.partitioner_path,
-                f'{self.solving_folder_path}/task-root.smt2',
+                f'{self.solving_folder_path}/task-{node.id}.smt2',
                 f'-outputdir:{self.solving_folder_path}',
-                f'-partimrt:{max(self.available_cores, self.num_dist_coords)}',
-                f'-partiseed:{parti_seed}',
+                f'-roottaskid:{node.id}',
+                f'-childtaskid:{left_child.id}',
+                f'-partiseed:{self.parti_seed}',
                 f'-getmodelflag:{int(self.get_model_flag)}'
             ]
         logging.debug(f'exec-command {" ".join(cmd)}')
@@ -418,11 +441,32 @@ class Coordinator:
                 stderr=subprocess.PIPE,
                 text=True
             )
-        self.partitioner = Partitioner(p)
+        self.tree.simplify_split_node(node, p)
     
-    def terminate_partitioner(self):
-        if self.partitioner.check_running():
-            self.partitioner.p.terminate()
+    def simplify_split_tasks(self):
+        while self.tree.get_running_number() < self.available_cores \
+          and self.tree.get_simplify_total_numner() < self.available_cores:
+            node = self.tree.get_next_unsolved_node()
+            if node == None:
+                break
+            self.simplify_split_task(node)
+    
+    def pre_partition_tasks(self):
+        while self.tree.get_running_number() < self.available_cores:
+            node = self.tree.get_next_unsolved_node()
+            if node == None:
+                break
+            self.simplify_split_task(node)
+    
+    # run simplifieds by:
+    # currently: generation order
+    # can be easily change to: priority select
+    def solve_simplified_tasks(self):
+        while self.tree.get_running_number() < self.available_cores:
+            node = self.tree.get_next_simplified_node()
+            if node == None:
+                break
+            self.solve_simplified_task(node)
     
     def start_solving(self):
         self.solving_folder_path = f'{self.coord_temp_folder_path}/tasks/round-{self.solving_round}'
@@ -432,7 +476,9 @@ class Coordinator:
         self.solving_start_time = time.time()
         self.tree = ParallelTree(self.solving_start_time)
         self.split_node = None
-        self.run_partitioner()
+        
+        root = self.tree.make_node(-1)
+        self.tree.unsolveds.append(root)
 
     # coordinator [rank] solved the assigned node
     def send_result_to_leader(self):
@@ -448,14 +494,19 @@ class Coordinator:
     
     # True -> solved
     def parallel_solving(self):
-        self.receive_partitioner_messages()
-        if self.partitioner.is_receive_done():
-            if self.is_done():
-                return True
+        # if self.check_simplifyings_status():
+        #     return True
+        # if self.check_solvings_status():
+        #     return True
+        
+        if self.check_simplifyings_status():
+            # self.tree_log_display()
+            return True
         if self.check_solvings_status():
             # self.tree_log_display()
             return True
-        self.run_waiting_tasks()
+        self.simplify_split_tasks()
+        self.solve_simplified_tasks()
         return False
     
     def select_split_node(self):
@@ -467,7 +518,6 @@ class Coordinator:
             self.terminate_node(path_node)
             path_node = path_node.parent
         self.tree.set_node_split(node, assigned_coord)
-        self.sync_ended_to_partitioner(node, NodeStatus.unsat)
     
     def solve_leader_root(self):
         msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
@@ -476,31 +526,30 @@ class Coordinator:
         self.start_solving()
     
     def pre_partition(self):
+        logging.debug(f'pre-partition start')
         subnodes = deque()
+        subnodes.append(self.tree.root)
         while True:
             # self.receive_message_from_leader()
             if self.check_original_task():
                 return True
-            self.receive_partitioner_messages()
-            if self.partitioner.is_receive_done():
-                break
+            if self.check_simplifyings_status():
+                # self.tree_log_display()
+                return True
+            self.pre_partition_tasks()
             if self.is_done():
                 return True
-            if len(subnodes) == 0:
-                if self.tree.root != None:
-                    assert(self.tree.root.status.is_unsolved())
-                    subnodes.append(self.tree.root)
-            if len(subnodes) > 0:
-                while len(subnodes) < self.num_dist_coords:
-                    node: ParallelNode = subnodes.popleft()
-                    if len(node.children) < 2:
-                        subnodes.append(node)
-                        break
-                    for child in node.children:
-                        if child.status.is_unsolved():
-                            subnodes.append(child)
-                if len(subnodes) >= self.num_dist_coords:
+            while len(subnodes) < self.num_dist_coords:
+                node: ParallelNode = subnodes.popleft()
+                if node.status.is_unsolved() or node.status.is_simplifying():
+                    subnodes.append(node)
                     break
+                if node.status.is_solved():
+                    continue
+                for child in node.children:
+                    subnodes.append(child)
+            if len(subnodes) >= self.num_dist_coords:
+                break
             if self.get_coordinator_time() > 20.0:
                 break
             time.sleep(0.1)
@@ -534,7 +583,7 @@ class Coordinator:
     def receive_node_from_coordinator(self, coord_rank):
         solving_folder_path = f'{self.coord_temp_folder_path}/tasks/round-{self.solving_round}'
         os.makedirs(solving_folder_path, exist_ok=True)
-        instance_path = f'{solving_folder_path}/task-root.smt2'
+        instance_path = f'{solving_folder_path}/task-0.smt2'
         instance_data = MPI.COMM_WORLD.recv(source=coord_rank, tag=2)
         with open(instance_path, 'bw') as file:
             file.write(instance_data)
@@ -552,7 +601,7 @@ class Coordinator:
                             dest=self.leader_rank, tag=2)
     
     def send_split_node_to_coordinator(self, target_rank):
-        instance_path = f'{self.solving_folder_path}/task-{self.split_node.pid}.smt2'
+        instance_path = f'{self.solving_folder_path}/task-{self.split_node.id}.smt2'
         logging.debug(f'split task path: {instance_path}')
         with open(instance_path, 'br') as file:
             instance_data = file.read()
@@ -560,7 +609,7 @@ class Coordinator:
                             dest=target_rank, tag=2)
         
     def send_root_task_to_coordinator(self, target_rank):
-        instance_path = f'{self.solving_folder_path}/task-root.smt2'
+        instance_path = f'{self.solving_folder_path}/task-0.smt2'
         logging.debug(f'split task path: {instance_path}')
         with open(instance_path, 'br') as file:
             instance_data = file.read()
@@ -595,16 +644,14 @@ class Coordinator:
         self.send_split_node_to_coordinator(target_rank)
     
     def round_clean_up(self):
-        assert(self.partitioner != None)
-        if self.partitioner.p != None:
-            self.partitioner.p.terminate()
-        self.partitioner = None
         assert(self.tree != None)
         for node in self.tree.solvings:
             assert(isinstance(node, ParallelNode))
-            if node.assign_to != None:
+            if node.status.is_solving():
                 node.assign_to.terminate()
-                node.assign_to = None
+            elif node.status.is_simplifying():
+                node.partitioner.terminate()
+        
         self.tree = None
         # shutil.rmtree(self.solving_folder_path)
 
@@ -648,7 +695,7 @@ class Coordinator:
     def check_original_task(self):
         if self.original_process is None:
             return False
-        sta: NodeStatus = self.check_subprocess_status(self.original_process)
+        sta: NodeStatus = self.check_base_solver_status(self.original_process)
         if sta.is_solving():
             return False
         elif sta.is_error():
@@ -662,13 +709,15 @@ class Coordinator:
     # solver original task with base solver
     def solve_original_task(self):
         logging.debug('solve_original_task')
-        self.original_process = self.solve_task('root')
+        self.original_process = self.solve_task('0')
     
     def isolated_solve(self):
         self.solve_leader_root()
-        self.solve_original_task()
+        # self.solve_original_task()
+        
         if self.pre_partition():
             self.solving_round_done()
+        
         while True:
             if MPI.COMM_WORLD.Iprobe(source=self.leader_rank, tag=1):
                 msg_type = MPI.COMM_WORLD.recv(source=self.leader_rank, tag=1)
@@ -676,10 +725,12 @@ class Coordinator:
                 assert(msg_type.is_terminate_coordinator())
                 self.tree_log_display()
                 raise TerminateMessage()
+            
             if self.status.is_solving():
                 if self.check_original_task():
                     self.solving_round_done()
                     continue
+                
                 if self.parallel_solving():
                     self.tree_log_display()
                     self.solving_round_done()
@@ -695,7 +746,7 @@ class Coordinator:
                 self.original_process.terminate()
         if self.status.is_solving():
             self.round_clean_up()
-            
+    
     def clean_temp_dir(self):
         logging.info(f'Coordinator-{self.rank} clean temp dir {self.temp_dir}')
         shutil.rmtree(self.temp_dir, ignore_errors=True)
