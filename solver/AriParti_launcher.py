@@ -126,9 +126,9 @@ if __name__ == '__main__':
     # logging.info(f'formula_logic: {formula_logic}')
     
     # base_solver = select_solver_for_logic(formula_logic)
-    # base_solver = 'z3pp-at-smt-comp-2023-bin'
+    base_solver = 'z3pp-at-smt-comp-2023-bin'
     # base_solver = 'z3-4.12.1-bin'
-    base_solver = 'cvc5-1.0.8-bin'
+    # base_solver = 'cvc5-1.0.8-bin'
     # base_solver = 'opensmt-2.5.2-bin'
     logging.info(f'base_solver: {base_solver}')
     

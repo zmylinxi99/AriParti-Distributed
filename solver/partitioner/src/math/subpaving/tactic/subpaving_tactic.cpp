@@ -464,8 +464,6 @@ class subpaving_tactic : public tactic {
                 }
                 return;
             }
-
-            
             
             // root task
             {
@@ -475,8 +473,8 @@ class subpaving_tactic : public tactic {
                 ast_smt_pp pp(m());
                 pp.set_benchmark_name(ss.str().c_str());
                 pp.set_logic(m_logic);
-                --sz;
-                for (unsigned i = 0; i < sz; ++i) {
+                // --sz;
+                for (unsigned i = 0; i < sz - 1; ++i) {
                     pp.add_assumption(m_task_expr_clauses[i].get());
                 }
                 pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
@@ -484,11 +482,9 @@ class subpaving_tactic : public tactic {
                     ofs << "(get-model)\n";
                 }
             }
-            // std::cout << "0 " << "111111111111\n";
             
             // left child
             {
-
                 std::stringstream ss;
                 ss << "task-" << m_child_task_id;
                 std::ofstream ofs(m_output_dir + "/" + ss.str() + ".smt2");
@@ -503,7 +499,6 @@ class subpaving_tactic : public tactic {
                     ofs << "(get-model)\n";
                 }
             }
-            // std::cout << "0 " << "22222222222222\n";
 
             // right child
             {
@@ -521,62 +516,6 @@ class subpaving_tactic : public tactic {
                     ofs << "(get-model)\n";
                 }
             }
-            // std::cout << "0 " << "333333333333333\n";
-
-            // m_task_expr_clauses.reset();
-
-            // std::string task_name;
-            // std::ofstream ofs;
-            
-            // // root task
-            // {
-            //     std::stringstream ss;
-            //     ss << "task-" << m_root_task_id;
-            //     task_name = ss.str();
-            // }
-            // ofs.open(m_output_dir + "/" + task_name + "-simplified.smt2");
-            // ast_smt_pp pp(m());
-            // pp.set_benchmark_name(task_name.c_str());
-            // pp.set_logic(m_logic);
-
-            // --sz;
-            // for (unsigned i = 0; i < sz; ++i) {
-            //     pp.add_assumption(m_task_expr_clauses[i].get());
-            // }
-            // pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
-            // if (m_get_model_flag) {
-            //     ofs << "(get-model)\n";
-            // }
-            
-            // // left child
-            // {
-            //     std::stringstream ss;
-            //     ss << "task-" << m_child_task_id;
-            //     task_name = ss.str();
-            // }
-            
-            // std::cout << "0 " << (m_output_dir + "/" + task_name + ".smt2") << "\n";
-            // ofs.open(m_output_dir + "/" + task_name + ".smt2");
-            // pp.add_assumption(m_task_expr_clauses[sz].get());
-            // pp.display_smt2(ofs, m_left_child_expr);
-            // if (m_get_model_flag) {
-            //     ofs << "(get-model)\n";
-            // }
-
-            // // right child
-            // {
-            //     std::stringstream ss;
-            //     ss << "task-" << (m_child_task_id + 1);
-            //     task_name = ss.str();
-            // }
-            // ofs.open(m_output_dir + "/" + task_name + ".smt2");
-            // pp.add_assumption(m_task_expr_clauses[sz].get());
-            // pp.display_smt2(ofs, m_right_child_expr);
-            // if (m_get_model_flag) {
-            //     ofs << "(get-model)\n";
-            // }
-
-            // m_task_expr_clauses.reset();
         }
         
         lbool solve() {

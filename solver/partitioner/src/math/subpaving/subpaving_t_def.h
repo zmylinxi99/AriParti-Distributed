@@ -839,42 +839,9 @@ typename context_t::node * context_t::mk_node(node * parent) {
     node * r;
     if (parent == nullptr) {
         r = new (mem) node(*this, m_num_nodes, m_is_bool);
-        if (m_rand_seed != 1) {
-            r->key_rank().push_back(0);
-            r->key_rank().push_back(1);
-            r->key_rank().push_back(3);
-            r->key_rank().push_back(2);
-            r->key_rank().push_back(4);
-            // for (unsigned i = 0; i < m_var_key_num; ++i)
-            //     r->key_rank().push_back(i);
-        }
-        else {
-            r->key_rank().push_back(0);
-            r->key_rank().push_back(3);
-            r->key_rank().push_back(1);
-            r->key_rank().push_back(2);
-            r->key_rank().push_back(4);
-        }
     }
     else {
         r = new (mem) node(parent, m_num_nodes);
-        // dynamic key rank
-        // unsigned pos = 0;
-        // for (unsigned i = 0; i < m_var_key_num; ++i) {
-        //     r->key_rank().push_back(parent->key_rank()[i]);
-        //     if (i > 0 && pos == 0 && parent->key_rank()[i - 1] < parent->key_rank()[i])
-        //         pos = i;
-        // }
-        // if (pos == 0) {
-        //     for (unsigned i = 0; i < m_var_key_num; ++i)
-        //         r->key_rank()[i] = i;
-        // }
-        // else {
-        //     std::swap(r->key_rank()[pos - 1], r->key_rank()[pos]);
-        // }
-        // static key rank
-        for (unsigned i = 0; i < m_var_key_num; ++i)
-            r->key_rank().push_back(parent->key_rank()[i]);
         
         for (unsigned i = 0, sz = parent->depth(); i < sz; ++i)
             r->split_vars().push_back(parent->split_vars()[i]);
@@ -2300,30 +2267,6 @@ void context_t::write_debug_line_to_coordinator(const std::string & line) {
     std::cout << control_message::P2C::debug_info << " " << line << std::endl;
 }
 
-// void context_t::write_debug_ss_line_to_coordinator() {
-//     if (!m_partitioner_debug)
-//         return;
-//     std::string lines = m_temp_stringstream.str();
-//     std::string line;
-//     unsigned pos = 0, sz = lines.size();
-//     while (pos < sz) {
-//         unsigned next_pos = lines.find('\n', pos);
-//         if (next_pos == std::string::npos) {
-//             line = lines.substr(pos, sz - pos);
-//             pos = sz;
-//         }
-//         else {
-//             line = lines.substr(pos, next_pos - pos);
-//             pos = next_pos + 1;
-//         }
-//         write_debug_line_to_coordinator(line);
-//     }
-//     // write_debug_line_to_coordinator(m_temp_stringstream.str());
-//     m_temp_stringstream.str("");
-//     m_temp_stringstream.clear();
-// }
-
-
 void context_t::write_debug_ss_line_to_coordinator() {
     if (!m_partitioner_debug)
         return;
@@ -2404,10 +2347,10 @@ void context_t::init_partition() {
     const params_ref &p = gparams::get_ref();
     m_output_dir = p.get_str("output_dir", "ERROR");
     SASSERT(m_output_dir != "ERROR");
-    {
-        m_temp_stringstream << "output dir: " << m_output_dir;
-        write_debug_ss_line_to_coordinator();
-    }
+    // {
+    //     m_temp_stringstream << "output dir: " << m_output_dir;
+    //     write_debug_ss_line_to_coordinator();
+    // }
     // m_max_running_tasks = p.get_uint("partition_max_running_tasks", 32);
     // m_max_alive_tasks = static_cast<unsigned>(m_max_running_tasks * 1.2) + 2;
     
@@ -2427,8 +2370,8 @@ void context_t::init_partition() {
         m_temp_stringstream << "clause number: " << m_clauses.size();
         write_debug_ss_line_to_coordinator();
         
-        m_temp_stringstream << "random seed: " << m_rand_seed;
-        write_debug_ss_line_to_coordinator();
+        // m_temp_stringstream << "random seed: " << m_rand_seed;
+        // write_debug_ss_line_to_coordinator();
     }
 }
 
@@ -3037,156 +2980,6 @@ bool context_t::convert_node_to_task(node * n) {
     return false;
 }
 
-// void context_t::convert_root_to_task() {
-//     node * n = m_root;
-//     task_info & task = m_bicp_task;
-//     // SASSERT(task.m_node_id == UINT32_MAX);
-//     task.m_node_id = n->id();
-//     task.m_depth = n->depth();
-//     vector<lit> temp_units;
-//     vector<vector<lit>> temp_clauses;
-//     // for (unsigned i = 0, isz = (*m_ptr_clauses).size(); i < isz; ++i) {
-//     //     clause * cla = (*m_ptr_clauses)[i];
-//     for (unsigned i = 0, isz = m_clauses.size(); i < isz; ++i) {
-//         clause * cla = m_clauses[i];
-//         m_temp_atom_buffer.reset();
-//         bool skippable = false;
-//         for (unsigned j = 0, jsz = cla->m_size; j < jsz; ++j) {
-//             atom * a = (*cla)[j];
-//             lbool res = value(a, n);
-//             TRACE("linxi_subpaving",
-//                 tout << "atom: ";
-//                 display(tout, a);
-//                 tout << "\n";
-//                 tout << "bool: " << a->is_bool() << "\n";
-//                 tout << "open: " << a->is_open() << "\n";
-//                 tout << "lower: " << a->is_lower() << "\n";
-//                 tout << "res: " << res << "\n";
-//             );
-//             if (res == l_true) {
-//                 skippable = true;
-//                 break;
-//             }
-//             else if (res == l_false) {
-//                 continue;
-//             }
-//             else {
-//                 m_temp_atom_buffer.push_back(a);
-//             }
-//         }
-//         if (skippable)
-//             continue;
-//         if (m_temp_atom_buffer.size() == 1) {
-//             temp_units.push_back(std::move(convert_atom_to_lit(m_temp_atom_buffer[0])));
-//             continue;
-//         }
-//         ++task.m_undef_clause_num;
-//         task.m_undef_lit_num += m_temp_atom_buffer.size();
-//         vector<lit> lit_cla, simp_lit_cla;
-//         for (unsigned j = 0, jsz = m_temp_atom_buffer.size(); j < jsz; ++j) {
-//             atom * a = m_temp_atom_buffer[j];
-//             lit_cla.push_back(std::move(convert_atom_to_lit(a)));
-//         }
-//         simplify_ineqs_in_clause(lit_cla, simp_lit_cla, false);
-//         if (simp_lit_cla.size() == 1) {
-//             temp_units.push_back(std::move(simp_lit_cla[0]));
-//         }
-//         else {
-//             temp_clauses.push_back(std::move(simp_lit_cla));
-//         }
-//     }
-//     remove_dominated_clauses(temp_clauses, task.m_clauses);
-
-//     // if (m_root_bicp_done)
-//     //     task.m_clauses.append(temp_clauses);
-//     // else
-//     //     remove_dominated_clauses(temp_clauses, task.m_clauses);
-    
-//     for (unsigned i = 0, sz = m_unit_clauses.size(); i < sz; ++i) {
-//         atom * at = UNTAG(atom*, m_unit_clauses[i]);
-//         if (m_defs[at->m_x] == nullptr)
-//             continue;
-//         temp_units.push_back(std::move(convert_atom_to_lit(at)));
-//         // ++task.m_undef_clause_num;
-//         // ++task.m_undef_lit_num;
-//     }
-
-//     for (unsigned i = 0, sz = n->up_atoms().size(); i < sz; ++i) {
-//         atom * at = n->up_atoms()[i];
-//         if (m_defs[at->m_x] == nullptr)
-//             continue;
-//         temp_units.push_back(std::move(convert_atom_to_lit(at)));
-//         // ++task.m_undef_clause_num;
-//         // ++task.m_undef_lit_num;
-//     }
-
-//     for (unsigned x = 0, sz = num_vars(); x < sz; ++x) {
-//         if (m_defs[x] != nullptr)
-//             continue;
-//         if (m_is_bool[x] && n->bvalue(x) == bvalue_kind::b_undef)
-//             continue;
-//         if (!m_is_bool[x] && n->lower(x) == nullptr && n->upper(x) == nullptr)
-//             continue;
-//         if (m_is_bool[x]) {
-//             temp_units.push_back(lit());
-//             lit & l = temp_units.back();
-//             l.m_x = x;
-//             l.m_bool = true;
-//             l.m_open = false;
-//             if (n->bvalue(x) == b_false)
-//                 l.m_lower = true;
-//             else if (n->bvalue(x) == b_true)
-//                 l.m_lower = false;
-//             else
-//                 UNREACHABLE();
-//         }
-//         else {
-//             bound * low = n->lower(x);
-//             bound * upp = n->upper(x);
-//             if (low != nullptr && upp != nullptr && nm().eq(low->value(), upp->value())) {
-//                 temp_units.push_back(lit());
-//                 lit & l = temp_units.back();
-//                 l.m_x = x;
-//                 l.m_bool = true;
-//                 l.m_open = true;
-
-//                 l.m_int = m_is_int[x];
-//                 l.m_lower = false;
-//                 l.m_val = &low->m_val;
-//             }
-//             else {
-//                 if (low != nullptr) {
-//                     temp_units.push_back(lit());
-//                     lit & l = temp_units.back();
-//                     l.m_x = x;
-//                     l.m_bool = false;
-
-//                     l.m_int = m_is_int[x];
-//                     l.m_open = low->m_open;
-//                     l.m_lower = true;
-//                     l.m_val = &low->m_val;
-//                 }
-//                 if (upp != nullptr) {
-//                     temp_units.push_back(lit());
-//                     lit & l = temp_units.back();
-//                     l.m_x = x;
-//                     l.m_bool = false;
-
-//                     l.m_int = m_is_int[x];
-//                     l.m_open = upp->m_open;
-//                     l.m_lower = false;
-//                     l.m_val = &upp->m_val;
-//                 }
-//             }
-//         }
-//     }
-    
-//     if (temp_units.size() == 0)
-//         return;
-    
-//     simplify_ineqs_in_clause(temp_units, task.m_var_bounds, true);
-// }
-
 void context_t::collect_task_var_info() {
     task_info & task = *m_ptask;
     unsigned nv = num_vars();
@@ -3295,11 +3088,6 @@ void context_t::select_best_var(node * n) {
     }
 
     m_best_var_info.m_id = null_var;
-    // m_curr_var_info.m_key_rank.reserve(m_var_key_num);
-    // for (unsigned i = 0; i < m_var_key_num; ++i) {
-    //     m_curr_var_info.m_key_rank[i] = n->key_rank()[i];
-    // }
-    std::uniform_real_distribution<> dis(0.0, 1.0);
     for (unsigned i = 0, x; i < sz; ++i) {
         x = m_var_split_candidates[i];
         bound * l = n->lower(x);
@@ -3313,18 +3101,6 @@ void context_t::select_best_var(node * n) {
         unsigned split_cnt = m_var_unsolved_split_cnt[x];
         double avg_split_cnt = 
             static_cast<double>(split_cnt) / static_cast<double>(m_unsolved_task_num + 1);
-        // double choose_prob = pow(m_split_prob_decay, avg_split_cnt);
-        // if (split_cnt > 0) {
-        //     m_temp_stringstream << "var " << x << ", avg_split_cnt: " << avg_split_cnt
-        //         << ", choose_prob: " << choose_prob << ", unsolved split cnt: " << split_cnt;
-        //     write_debug_ss_line_to_coordinator();
-        // }
-        // if (m_best_var_info.m_id != null_var && dis(m_rand) > choose_prob)
-        //     continue;
-        // if (split_cnt > 0) {
-        //     m_temp_stringstream << "var " << x << " is chosen";
-        //     write_debug_ss_line_to_coordinator();
-        // }
         m_curr_var_info.m_id = x;
         m_curr_var_info.m_split_cnt = m_var_unsolved_split_cnt[x];
         m_curr_var_info.m_avg_split_cnt = avg_split_cnt;
@@ -3752,14 +3528,6 @@ void context_t::split_node(node * n) {
         write_debug_ss_line_to_coordinator();
     }
 
-    // lit & lc = m_ptask->m_split_left_child;
-    // lc.m_x = id;
-    // lc.m_bool = false;
-
-    // lc.m_int = m_is_int[id];
-    // lc.m_open = lb->m_open;
-    // lc.m_lower = lb->m_lower;
-    // lc.m_val = &(lb->m_val);
     lit & rc = m_ptask->m_split_right_child;
     rc.m_x = id;
     rc.m_bool = false;
@@ -3797,7 +3565,6 @@ bool context_t::create_new_task() {
         bool is_unsat = convert_node_to_task(n);
         if (!m_root_bicp_done) {
             m_root_bicp_done = true;
-            // store_root_task_after_bicp();
             {
                 m_temp_stringstream << "root_bicp done";
                 write_debug_ss_line_to_coordinator();
@@ -3815,22 +3582,6 @@ bool context_t::create_new_task() {
             m_nodes_state[n->id()] = node_state::UNSAT;
             continue;
         }
-        // if (m_root_bicp_done) {
-        //     convert_node_task_to_task(n);
-        // }
-        // else {
-        //     m_root_bicp_done = true;
-        //     convert_root_to_task();
-        //     store_root_task_after_bicp();
-        //     // m_ptr_wlist = &m_bicp_wlist;
-        //     // m_ptr_units = &m_bicp_unit_clauses;
-        //     // m_ptr_clauses = &m_bicp_clauses;
-        //     // rebuild_clauses_after_bicp();
-        //     {
-        //         m_temp_stringstream << "m_root_bicp_done";
-        //         write_debug_ss_line_to_coordinator();
-        //     }
-        // }
         {
             // m_temp_stringstream << "alive tasks: "<< m_alive_task_num
             //     << "(" << m_max_alive_tasks << "), nodes: " << m_nodes.size();

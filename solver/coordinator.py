@@ -63,8 +63,7 @@ class Coordinator:
         
         self.coord_temp_folder_path = f'{self.temp_dir}/Coordinator-{self.rank}'
         # assign a core to coordinator and partitioner
-        self.available_cores -= 1
-        self.max_unsolved_tasks = self.available_cores + self.available_cores // 3 + 1
+        # self.available_cores -= 1
         
         self.init_logging()
         os.makedirs(self.coord_temp_folder_path, exist_ok=True)
@@ -372,34 +371,6 @@ class Coordinator:
                     self.check_solving_status
                 )
     
-    # def check_simplifyings_status(self):
-    #     still_simplifyings = [] 
-    #     for node in self.tree.simplifyings:
-    #         node: ParallelNode
-    #         if not node.status.is_simplifying():
-    #             continue
-    #         if self.check_simplifying_status(node):
-    #             still_simplifyings.append(node)
-    #         else:
-    #             if self.is_done():
-    #                 return True
-    #     self.tree.simplifyings = still_simplifyings
-    #     return False
-    
-    # def check_solvings_status(self):
-    #     still_solvings = [] 
-    #     for node in self.tree.solvings:
-    #         node: ParallelNode
-    #         if not node.status.is_solving():
-    #             continue
-    #         if self.check_solving_status(node):
-    #             still_solvings.append(node)
-    #         else:
-    #             if self.is_done():
-    #                 return True
-    #     self.tree.solvings = still_solvings
-    #     return False
-    
     def log_tree_infos(self):
         logging.debug(
             f'nodes: {self.tree.get_node_number()}, '
@@ -494,11 +465,6 @@ class Coordinator:
     
     # True -> solved
     def parallel_solving(self):
-        # if self.check_simplifyings_status():
-        #     return True
-        # if self.check_solvings_status():
-        #     return True
-        
         if self.check_simplifyings_status():
             # self.tree_log_display()
             return True

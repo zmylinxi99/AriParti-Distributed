@@ -264,11 +264,6 @@ class ParallelTree(PartitionTree):
             node.assign_to.terminate()
             node.assign_to = None
     
-    # def terminate_split_path(self, node: ParallelNode):
-    #     self.terminate_node(node, NodeReason.split)
-    #     if node.parent != None:
-    #         self.terminate_split_path(node.parent)
-    
     def set_node_split(self, node: ParallelNode, assigned_coord: int):
         # self.terminate_split_path(node)
         node.assigned_coord = assigned_coord
@@ -409,16 +404,6 @@ class ParallelTree(PartitionTree):
                            NodeReason.itself,
                            self.get_current_time())
         self.solvings.append(node)
-        
-    # def log_display_dfs(self, node: ParallelNode, depth: int):
-    #     logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
-    #     for child in node.children:
-    #         self.log_display_dfs(child, depth + 1)
-    
-    # def log_display(self):
-    #     logging.debug(f'display parallel tree')
-    #     if self.root != None:
-    #         self.log_display_dfs(self.root, 0)
     
     def log_display(self):
         logging.debug(f'display parallel tree')
@@ -511,11 +496,6 @@ class DistributedTree(PartitionTree):
         ret = self.make_node(parent)
         ret.assign_to = coord_id
         return ret
-    
-    # def log_display_dfs(self, node: DistributedNode, depth: int):
-    #     logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
-    #     for child in node.children:
-    #         self.log_display_dfs(child, depth + 1)
     
     def log_display(self):
         logging.debug(f'display distributed tree')

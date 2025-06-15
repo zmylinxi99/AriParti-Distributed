@@ -54,6 +54,7 @@ void region::pop_scope() {
 #include "util/debug.h"
 #include "util/memory_manager.h"
 #include "util/page.h"
+#include <cstdint>
 
 inline void region::allocate_page() {
     m_curr_page     = allocate_default_page(m_curr_page, m_free_pages);

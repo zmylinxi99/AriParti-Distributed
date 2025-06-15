@@ -255,7 +255,6 @@ public:
         // Doubly linked list of leaves to be processed
         node *                m_prev;
         node *                m_next;
-        unsigned_vector       m_key_rank;
         unsigned_vector       m_split_vars;
         // atoms by unit propagation
         ptr_vector<atom>      m_up_atoms;
@@ -296,7 +295,6 @@ public:
 
         unsigned depth() const { return m_depth; }
         
-        unsigned_vector & key_rank() { return m_key_rank; }
         unsigned_vector & split_vars() { return m_split_vars; }
         ptr_vector<atom> & up_atoms() { return m_up_atoms; }
     };
@@ -484,7 +482,6 @@ public:
 
         double m_score;
 
-        unsigned_vector m_key_rank;
         numeral_manager & m_nm;
 
         var_info(numeral_manager & _nm) : 
@@ -533,19 +530,6 @@ public:
             }
             return false;
         }
-
-        // // lhs less than rhs means lhs is a better choice
-        // bool operator < (const var_info & rhs) const {
-        //     if (m_is_too_short != rhs.m_is_too_short)
-        //         return rhs.m_is_too_short;
-        //     for (unsigned i : m_key_rank) {
-        //         if (i == 0)
-        //             continue;
-        //         if (!key_eq(i, rhs))
-        //             return key_lt(i, rhs);
-        //     }
-        //     return false;
-        // }
 
         // lhs less than rhs means lhs is a better choice
         bool operator < (const var_info & rhs) const {
