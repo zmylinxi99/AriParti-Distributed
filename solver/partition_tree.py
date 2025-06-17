@@ -371,8 +371,6 @@ class ParallelTree(PartitionTree):
             node: ParallelNode):
         self.update_node_status(node,
                 NodeStatus.simplified, NodeReason.partitioner)
-        self.unsolveds.append(node.children[0])
-        self.unsolveds.append(node.children[1])
         self.simplifieds.append(node)
     
     def node_solved(self, 

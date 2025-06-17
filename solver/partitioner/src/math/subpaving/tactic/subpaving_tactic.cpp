@@ -431,8 +431,10 @@ class subpaving_tactic : public tactic {
                 }
             );
 
-            m_left_child_expr = convert_lit_to_expr(m_task.m_split_left_child);
-            m_right_child_expr = convert_lit_to_expr(m_task.m_split_right_child);
+            if (m_task.m_splitting_var != subpaving::null_var) {
+                m_left_child_expr = convert_lit_to_expr(m_task.m_split_left_child);
+                m_right_child_expr = convert_lit_to_expr(m_task.m_split_right_child);
+            }
         }
 
         // output current subtask to .smt2 file
@@ -473,15 +475,17 @@ class subpaving_tactic : public tactic {
                 ast_smt_pp pp(m());
                 pp.set_benchmark_name(ss.str().c_str());
                 pp.set_logic(m_logic);
-                // --sz;
                 for (unsigned i = 0; i < sz - 1; ++i) {
                     pp.add_assumption(m_task_expr_clauses[i].get());
                 }
-                pp.display_smt2(ofs, m_task_expr_clauses[sz].get());
+                pp.display_smt2(ofs, m_task_expr_clauses[sz - 1].get());
                 if (m_get_model_flag) {
                     ofs << "(get-model)\n";
                 }
             }
+
+            if (m_task.m_splitting_var == subpaving::null_var)
+                return;
             
             // left child
             {

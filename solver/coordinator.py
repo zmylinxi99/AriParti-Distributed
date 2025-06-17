@@ -296,6 +296,8 @@ class Coordinator:
         
         if sta.is_simplified():
             self.tree.node_simplified(node)
+            node.unsolveds.append(node.children[0])
+            node.unsolveds.append(node.children[1])
         else:
             self.tree.node_solved(node, sta, NodeReason.partitioner)
         

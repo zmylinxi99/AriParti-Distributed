@@ -55,6 +55,8 @@ struct task_info {
     unsigned m_undef_clause_num;
     vector<vector<lit>> m_clauses;
     vector<lit> m_var_bounds;
+    
+    var m_splitting_var;
     lit m_split_left_child;
     lit m_split_right_child;
     

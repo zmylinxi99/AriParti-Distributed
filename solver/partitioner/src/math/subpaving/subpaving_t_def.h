@@ -3310,6 +3310,7 @@ typename context_t::node * context_t::select_next_node() {
 void context_t::split_node(node * n) {
     select_best_var(n);
     unsigned id = m_best_var_info.m_id;
+    m_ptask->m_splitting_var = id;
     if (id == null_var) {
         write_debug_line_to_coordinator("no split var is selected");
         return;

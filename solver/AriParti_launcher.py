@@ -126,9 +126,9 @@ if __name__ == '__main__':
     # logging.info(f'formula_logic: {formula_logic}')
     
     # base_solver = select_solver_for_logic(formula_logic)
-    base_solver = 'z3pp-at-smt-comp-2023-bin'
+    # base_solver = 'z3pp-at-smt-comp-2023-bin'
     # base_solver = 'z3-4.12.1-bin'
-    # base_solver = 'cvc5-1.0.8-bin'
+    base_solver = 'cvc5-1.0.8-bin'
     # base_solver = 'opensmt-2.5.2-bin'
     logging.info(f'base_solver: {base_solver}')
     
@@ -178,8 +178,8 @@ if __name__ == '__main__':
     
     dispatcher_path = os.path.join(script_dir, 'dispatcher.py')
     solver_path = os.path.join(script_dir, 'binary-files', base_solver)
-    # partitioner_path = os.path.join(script_dir, 'binary-files', 'partitioner-bin')
-    partitioner_path = '/home/zhaomy/smt/solver/AriParti-Distributed/solver/partitioner/build/z3'
+    partitioner_path = os.path.join(script_dir, 'binary-files', 'partitioner-bin')
+    # partitioner_path = '/home/zhaomy/smt/solver/AriParti-Distributed/solver/partitioner/build/z3'
     
     cmd_paras.extend([
         'python3', f'{dispatcher_path}',
