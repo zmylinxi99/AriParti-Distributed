@@ -1,0 +1,8 @@
+{
+    "formula_file": "/home/zhaomy/smt/solver/AriParti-Distributed/test/instances/lia-unsat-17.8.smt2",
+    "output_dir": "/home/zhaomy/smt/solver/AriParti-Distributed/test/output/lia-parallel-64",
+    "timeout_seconds": 1200,
+    "base_solver": "opensmt-2.5.2-bin",
+    "mode": "parallel",
+    "parallel_core": 64
+}

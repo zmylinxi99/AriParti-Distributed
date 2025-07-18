@@ -1,0 +1,18 @@
+{
+    "formula_file": "/home/zhaomy/smt/solver/AriParti-Distributed/test/instances/nia-sat-6.2.smt2",
+    "output_dir": "/home/zhaomy/smt/solver/AriParti-Distributed/test/output/nia-distributed-128",
+    "timeout_seconds": 1200,
+    "base_solver": "z3-4.12.1-bin",
+    "mode": "distributed",
+    "network_interface": "enp1s0f1",
+    "worker_node_ips": [
+        "192.168.100.13",
+        "192.168.100.14",
+        "192.168.100.15"
+    ],
+    "worker_node_cores": [
+        32,
+        32,
+        64
+    ]
+}
