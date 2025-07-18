@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import shlex
+import shutil
 import string
 import random
 import logging
@@ -53,7 +54,9 @@ def check_get_model_flag(file):
     return 0
 
 def init_logging(log_dir_path):
-    os.makedirs(log_dir_path, exist_ok=True)
+    if os.path.exists(log_dir_path):
+        shutil.rmtree(log_dir_path)
+    os.makedirs(log_dir_path)
     logging.basicConfig(format='%(relativeCreated)d - %(levelname)s - %(message)s', 
             filename=f'{log_dir_path}/launcher.log', level=logging.DEBUG)
     current_time = datetime.now()
@@ -84,38 +87,61 @@ def prepare_temp_folder():
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        sys.exit('Usage: python3 AriParti_launcher.py <request_directory>')
+        sys.exit('Usage: python3 AriParti_launcher.py <config>')
     
     # output_total_time = True
     output_total_time = False
     
     if output_total_time:
         start_time = time.time()
-    
-    request_directory = sys.argv[1]
-    
-    # Initialize logging
-    init_logging(f'{request_directory}/logs')
+
+    config_path = sys.argv[1]
     
     # Load configuration
     try:
-        with open(os.path.join(request_directory, 'input.json'), 'r') as file:
+        with open(config_path, 'r') as file:
             config_data: dict = json.load(file)
     except Exception as e:
-        logging.error(f'Failed to load config: {e}')
+        # logging.error(f'Failed to load config: {e}')
         sys.exit(f'Failed to load config: {e}')
 
+    output_dir = config_data.get('output_dir')
+    os.makedirs(output_dir, exist_ok=True)
+    # Initialize logging
+    init_logging(os.path.join(output_dir, 'logs'))
     formula_file = config_data.get('formula_file')
+    assert(formula_file != None), 'formula_file is required'
     timeout_seconds = config_data.get('timeout_seconds')
-    worker_node_ips = config_data.get('worker_node_ips')
-    worker_node_cores = config_data.get('worker_node_cores')
+    assert(timeout_seconds != None), 'timeout_seconds is required'
+    base_solver = config_data.get('base_solver')
+    assert(base_solver != None), 'base_solver is required'
+    mode = config_data.get('mode')
+    assert(mode != None), 'mode is required'
+    if mode == 'parallel':
+        parallel_core = config_data.get('parallel_core')
+        assert(parallel_core != None), 'parallel_core is required'
+        
+        network_interface = 'lo'
+        worker_node_ips = ['localhost']
+        worker_node_cores = [parallel_core]
+    elif mode == 'distributed':
+        network_interface = config_data.get('network_interface')
+        assert(network_interface != None), 'network_interface is required'
+        worker_node_ips = config_data.get('worker_node_ips')
+        assert(worker_node_ips != None), 'worker_node_ips is required'
+        worker_node_cores = config_data.get('worker_node_cores')
+        assert(worker_node_cores != None), 'worker_node_cores is required'
+    else:
+        assert(False), f'Unsupported mode: {mode}'
+    
     if not all([formula_file, timeout_seconds, worker_node_ips]):
         logging.error(f'Failed to load config: {e}')
         sys.exit('Missing required configuration parameters')
-    
-    logging.info(f'request_directory: {request_directory}')
-    logging.info(f'formula_file: {formula_file}')
-    logging.info(f'timeout_seconds: {timeout_seconds}')
+
+    logging.info(f'Loaded configuration from {config_path}')
+    logging.info(f'output_dir: {output_dir}')
+    logging.info(f'mode: {mode}')
+    logging.info(f'network_interface: {network_interface}')
     logging.info(f'worker_node_ips: {worker_node_ips}')
     logging.info(f'worker_node_cores: {worker_node_cores}')
     
@@ -129,12 +155,12 @@ if __name__ == '__main__':
     # base_solver = 'z3pp-at-smt-comp-2023-bin'
     # base_solver = 'z3-4.12.1-bin'
     # base_solver = 'cvc5-1.0.8-bin'
-    base_solver = 'opensmt-2.5.2-bin'
+    # base_solver = 'opensmt-2.5.2-bin'
+    
     logging.info(f'base_solver: {base_solver}')
     
     get_model_flag: int = check_get_model_flag(formula_file)
     
-    output_dir = request_directory
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
             
@@ -164,11 +190,8 @@ if __name__ == '__main__':
     
     cmd_paras = [
         'mpiexec',
-        ### COMP-UPDATE ###
-        # '--mca btl_tcp_if_include eth0',
         '--mca', 'btl_tcp_if_include',
-        'enp1s0f1',
-        # 'ens6f0',
+        network_interface,
         '--allow-run-as-root',
         '--use-hwthread-cpus',
         '--bind-to', 'none',
@@ -219,7 +242,7 @@ if __name__ == '__main__':
     logging.info(result.stderr.decode('utf-8'))
     
     sys.stdout.write(result.stdout.decode('utf-8'))
-    sys.stderr.write(result.stderr.decode('utf-8'))
+    # sys.stderr.write(result.stderr.decode('utf-8'))
     
     if output_total_time:
         end_time = time.time()
