@@ -1,13 +1,41 @@
-# AriParti: Distributed and Parallel SMT Solving Based on Dynamic Variable-level Partitioning
+# AriParti-Distributed: Distributed and Parallel SMT Solving with Dynamic Variable-Level Partitioning
 
-AriParti is an open-source distributed and parallel SMT solving framework based on dynamic variable-level partitioning, as described in our paper *Distributed and Parallel SMT Solving Based on Dynamic Variable-level Partitioning*. It is optimized for arithmetic theories and supports any SMT solver that accepts the SMT-LIB v2 format.
+AriParti-Distributed is a high-performance open-source framework for distributed and parallel Satisfiability Modulo Theories (SMT) solving. It extends the dynamic variable-level partitioning strategy from our CAV 2024 Distinguished Paper into a scalable two-tier Leader–Coordinator–Worker architecture for large clusters.
+
+The framework supports any SMT solver that accepts the SMT-LIB v2 format (e.g., Z3, CVC5, OpenSMT2), and is optimized for arithmetic theories. It incorporates advanced techniques like Boolean and Interval Constraint Propagation (BICP) for efficient formula simplification.
+
+- Paper: *Distributed and Parallel SMT Solving Based on Dynamic Variable-Level Partitioning* (submitted to Formal Methods in System Design)
+- Project: [AriParti GitHub](https://github.com/shaowei-cai-group/AriParti)
+- Distributed version: [AriParti-Distributed GitHub](https://github.com/zmylinxi99/AriParti-Distributed)
 
 The project includes code from the Z3 project (MIT License) and is itself released under the [MIT License](LICENSE.txt).
 
-Project homepage: [GitHub - AriParti](https://github.com/shaowei-cai-group/AriParti)
-Project homepage: [GitHub - AriParti-Distributed](https://github.com/zmylinxi99/AriParti-Distributed)
+## Features
+
+- **Dynamic Variable-Level Partitioning**
+  - Fine-grained divide-and-conquer parallelism.
+  - Robust even for pure-conjunction and almost-pure-conjunction formulas.
+
+- **Boolean and Interval Constraint Propagation (BICP)**
+  - Enhanced propagation by combining Boolean and arithmetic reasoning.
+
+- **Two-Tier Distributed Architecture**
+  - Leader: Global task scheduling and inter-server coordination.
+  - Coordinators: Intra-server dynamic load balancing and parallel tree maintenance.
+  - Workers: Solve subtasks using backend SMT solvers.
+
+- **Flexible Solver Backend**
+  - Supports any SMT solver accepting SMT-LIB v2 format.
+  - Tested with CVC5, Z3, and OpenSMT2.
+
+- **High Scalability**
+  - Efficiently scales up to 512 cores with 96.99% CPU utilization.
+
+- **Multi-Theory Support**
+  - Handles QF_LRA, QF_LIA, QF_NRA, and QF_NIA benchmarks.
 
 ---
+
 ## Build Instructions
 
 ### Requirements
@@ -18,7 +46,7 @@ Project homepage: [GitHub - AriParti-Distributed](https://github.com/zmylinxi99/
 * GLIBC version >= 2.29
 * MPI (e.g., OpenMPI)
 * python3-mpi4py
-* Installed SMT solvers (CVC5, Z3, OpenSMT2 binaries provided in `binary-files/`)
+* Installed SMT solvers (CVC5, Z3, OpenSMT2 binaries provided in `linux-pre_built/binaries`)
 * Unix-like OS (tested on Ubuntu 20.04 and 22.04)
 
 Install Python MPI bindings:
@@ -26,20 +54,6 @@ Install Python MPI bindings:
 ```bash
 sudo apt-get install python3-mpi4py
 ```
-
----
-
-### Build AriParti
-
-The provided `build.py` script automates the build process for AriParti. It performs the following steps:
-
-1. Creates the `bin/` and `bin/binaries/` directories.
-2. Copies the core Python scripts from `src/` to `bin/`.
-3. Builds the partitioner by running:
-
-   * `python scripts/mk_make.py`
-   * `make -j`
-4. Installs the partitioner binary to `bin/binaries/partitioner-bin`.
 
 ---
 
@@ -131,64 +145,46 @@ This flexibility allows you to test AriParti with different solvers and versions
 
 ```
 AriParti-Distributed/
-├── solver/                    # Core distributed SMT solver
-│   ├── AriParti_launcher.py       # Multi-node launcher (distributed mode)
-│   ├── run_AriParti.py            # Single-node entry point (local testing)
-│   ├── leader.py                  # Leader process for global scheduling
-│   ├── coordinator.py             # Coordinator process for intra-node scheduling
-│   ├── dispatcher.py              # Orchestrates leader/coordinators/workers
-│   ├── partition_tree.py          # Partition tree management & UNSAT propagation
-│   ├── control_message.py         # MPI control message definitions
-│   ├── partitioner.py             # Dynamic variable-level partitioner (BICP)
-│   ├── binary-files/              # Prebuilt solver and partitioner binaries
-│   │   ├── cvc5-1.0.8-bin
-│   │   ├── z3-4.12.1-bin
-│   │   ├── z3pp-at-smt-comp-2023-bin
-│   │   ├── opensmt-2.5.2-bin
-│   │   └── partitioner-bin
+├── src/                            # Core distributed SMT solving framework
+│   ├── AriParti_launcher.py        # Entry point for multi-node distributed runs
+│   ├── leader.py                   # Leader process: global task scheduling & coordination
+│   ├── coordinator.py              # Coordinator process: intra-server scheduling
+│   ├── dispatcher.py               # Orchestrates leader, coordinators, and workers
+│   ├── partition_tree.py           # Partition tree maintenance & UNSAT propagation
+│   ├── control_message.py          # MPI message definitions for control flow
+│   ├── partitioner.py              # Dynamic variable-level partitioner (with BICP)
+│   └── utils/                      # Utility modules shared by components
 │
-├── test/                      # Test suite & benchmark instances
-│   ├── config/                    # Example JSON configurations for tests
-│   │   ├── solve-lra-sat-6.63.json
-│   ├── instances/                 # SMT-LIB v2 test formulas
-│   │   ├── lia-sat-0.4.smt2
-│   │   ├── lra-sat-6.63.smt2
-│   │   ├── nia-unsat-112.5.smt2
-│   │   ├── nra-unsat-53.43.smt2
-│   │   └── README.md              # Describes benchmark categories
-│   ├── output/                    # Test outputs (auto-generated)
-│   │   └── input.json             # Auto-generated during test runs
-│   └── run_tests.sh               # One-click test runner script
+├── linux-pre_built/                # Prebuilt SMT solver binaries (Linux)
 │
-├── experiment-results/        # Experimental results from paper
-│   ├── distributed/               # Results from distributed experiments
-│   │   ├── cpu-usage/             # CPU usage data for utilization analysis
-│   │   │   ├── QF_LIA-13226/
-│   │   │   ├── QF_LRA-1753/
-│   │   │   ├── QF_NIA-25358/
-│   │   │   └── QF_NRA-12134/
-│   │   ├── data/                  # Experimental data (without CPU usage)
-│   │   │   ├── QF_LIA-13226/
-│   │   │   ├── QF_LRA-1753/
-│   │   │   ├── QF_NIA-25358/
-│   │   │   └── QF_NRA-12134/
-│   │   └── sumup/                 # Summary results for each theory
-│   │       ├── QF_LIA-results-sumup.txt
-│   │       ├── QF_LRA-results-sumup.txt
-│   │       ├── QF_NIA-results-sumup.txt
-│   │       └── QF_NRA-results-sumup.txt
-│   ├── parallel/                  # Results from parallel (single-node) experiments
-│   │   ├── QF_LIA-13226/
-│   │   ├── QF_LIA-13226-results-sumup.txt
-│   │   ├── QF_LRA-1753/
-│   │   ├── QF_LRA-1753-results-sumup.txt
-│   │   ├── QF_NIA-25358/
-│   │   ├── QF_NIA-25358-results-sumup.txt
-│   │   ├── QF_NRA-12134/
-│   │   └── QF_NRA-12134-results-sumup.txt
-├── build.py
-├── README.md                  # Main documentation (English)
-├── LICENSE.txt                # MIT License
+├── benchmark-lists/                # Benchmark set listings for batch experiments
+│   ├── all/                        # Full benchmark lists (LRA, LIA, NRA, NIA)
+│   │   ├── QF_LRA-all_list-1753.txt
+│   │   ├── QF_LIA-all_list-13226.txt
+│   │   ├── QF_NRA-all_list-12134.txt
+│   │   └── QF_NIA-all_list-25358.txt
+│   └── pure-conjunction/           # Filtered lists for pure conjunction instances
+│       ├── QF_LRA-pure_conjunction_list-337.txt
+│       ├── QF_LIA-pure_conjunction_list-4066.txt
+│       ├── QF_NRA-pure_conjunction_list-6034.txt
+│       └── QF_NIA-pure_conjunction_list-1520.txt
+│
+├── test/                           # Test suite & benchmark instances
+│   ├── config/                     # Example JSON configurations
+│   ├── instances/                  # SMT-LIB v2 test formulas
+│   ├── output/                     # Auto-generated test outputs
+│   └── run_tests.sh                # One-click test runner script
+│
+├── experiment-results/             # Collected experimental results
+│   ├── distributed/                # Distributed mode results (multi-node)
+│   │   ├── cpu-usage/              # CPU utilization data for analysis
+│   │   ├── data/                   # Raw results without CPU usage
+│   │   └── sumup/                  # Summary tables (4 theories)
+│   └── parallel/                   # Parallel mode results (single-node)
+│
+├── build.py                        # Build script for packaging components
+├── README.md                       # Main project documentation (this file)
+└── LICENSE.txt                     # MIT License
 
 ```
 
