@@ -272,9 +272,9 @@ python3 solver/AriParti_launcher.py test/config/distributed-128.json
 
 ### Network Interface Configuration
 
-AriParti uses MPI (`mpiexec`) for inter-node communication. Set the `network_interface` field in your configuration JSON to the name of the network interface used for cluster communication.
+AriParti uses MPI (`mpiexec`) for inter-node communication. The `network_interface` field in your configuration JSON specifies the name of the network interface used for cluster communication.
 
-To find your interface name:
+To find your network interface name, run:
 
 ```bash
 ip addr
@@ -286,9 +286,54 @@ or
 ifconfig
 ```
 
-Common names include `eth0`, `ens33`, and `enp1s0f1`. Replace `enp1s0f1` in the configuration if necessary.
+Common interface names include `eth0`, `ens33`, and `enp1s0f1`. Replace `enp1s0f1` in your configuration if your cluster uses a different network interface.
 
 ---
+
+### Important Notes for Multi-Server Setup
+
+The current distributed version requires all servers in the cluster to use the same network interface name for communication. If this condition is not met (for example, servers have different interface names or isolated networks), you must modify the launcher configuration.
+
+In `AriParti_launcher.py`, locate the following code:
+
+```python
+'--mca', 'btl_tcp_if_include', config['network_interface'],
+```
+
+Replace it with an exclusion-based configuration:
+
+```bash
+--mca btl_tcp_if_exclude XXX
+```
+
+Here, `XXX` is a comma-separated list of all interfaces to exclude from MPI communication.
+
+Example:
+
+```bash
+--mca btl_tcp_if_exclude lo,docker0
+```
+
+This excludes the loopback (`lo`) and Docker (`docker0`) interfaces, allowing MPI to use only physical network interfaces such as `eth0` or `enp1s0f1` for inter-node communication.
+
+It is important to apply the same exclusion configuration on all servers to ensure consistent MPI behavior.
+
+---
+
+### Why This Change is Necessary
+
+This modification allows AriParti to:
+
+* Support heterogeneous clusters where servers may have different network interface configurations.
+* Avoid errors caused by MPI attempting to use non-routable interfaces (such as Docker bridges or loopback).
+
+---
+
+### Checklist for Distributed Runs
+
+* Verify that all nodes can ping each other over the selected network interface.
+* Set `network_interface` correctly in `config.json` or configure `btl_tcp_if_exclude` as described.
+* Ensure excluded interfaces are consistent across all servers.
 
 ### Outputs
 
