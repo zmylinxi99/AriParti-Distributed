@@ -1,0 +1,10 @@
+{
+    "formula_file": "test/instances/lia-unsat-17.8.smt2",
+    "output_dir": "test/output/lia-parallel-64",
+    "timeout_seconds": 1200,
+    "base_solver": "opensmt-2.5.2-bin",
+    "mode": "parallel",
+    "parallel_core": 64,
+    "bicp_enabled": true,
+    "clause_reduction_enabled": true
+}

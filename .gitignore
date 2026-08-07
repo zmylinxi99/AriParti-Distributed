@@ -1,26 +1,30 @@
 
-/solver/partitioner/build/**
+/src/partitioner/build/**
 # Auto generated files.
 config.log
-/solver/partitioner/config.status
+/src/partitioner/config.status
 install_tactic.cpp
 mem_initializer.cpp
 gparams_register_modules.cpp
 config-debug.mk
 config-release.mk
-/solver/partitioner/src/ast/pattern/database.h
-/solver/partitioner/src/util/version.h
-/solver/partitioner/src/util/z3_version.h
+/src/partitioner/src/ast/pattern/database.h
+/src/partitioner/src/util/version.h
+/src/partitioner/src/util/z3_version.h
 
 # .hpp files are automatically generated
 *.hpp
 *.pyc
 
 # PartitionSMT
-# /solver/
+# /src/
 /linxi-develop/
 /expr-src/
-/solver/binary-files/
 
+/bin
+
+/test/output/nia-distributed-128
+/test/output/nra-distributed-128
+/test/output/lia-parallel-64
 .vscode
 __pycache__

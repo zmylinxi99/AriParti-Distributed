@@ -1,0 +1,20 @@
+{
+    "formula_file": "test/instances/nia-sat-6.2.smt2",
+    "output_dir": "test/output/nia-distributed-128",
+    "timeout_seconds": 1200,
+    "base_solver": "z3-4.12.1-bin",
+    "mode": "distributed",
+    "bicp_enabled": true,
+    "clause_reduction_enabled": true,
+    "network_subnet": "192.0.2.0/24",
+    "worker_node_ips": [
+        "192.0.2.11",
+        "192.0.2.12",
+        "192.0.2.13"
+    ],
+    "worker_node_cores": [
+        32,
+        32,
+        64
+    ]
+}
