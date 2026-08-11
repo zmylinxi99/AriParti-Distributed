@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "scope": "current repository snapshot",
+  "aggregation": {
+    "decisive_statuses": [
+      "sat",
+      "unsat"
+    ],
+    "unresolved_status_rule": "every other recorded status is unresolved",
+    "nominal_timeout_seconds": 1200,
+    "par2_penalty_seconds": 2400,
+    "par2_rule": "sum full-precision decisive runtimes and 2400 seconds for every unresolved record; round the total to the nearest whole second using round-half-up",
+    "status_precedence": "the recorded status determines whether a run is decisive; a decisive runtime is retained as recorded even if collection or cutoff-enforcement latency makes it exceed 1200 seconds",
+    "observed_decisive_records_above_nominal_timeout": 2
+  },
+  "legacy_parallel_and_distributed_campaigns": {
+    "benchmark_identity": "benchmark-lists/manifest.csv and the files it names",
+    "backend_identity": "solver family and advertised version are encoded in result filenames; executable hashes are unavailable",
+    "slot_label_semantics": {
+      "parallel_pN": "N configured slots on one server",
+      "distributed_sS_pP": "S servers with P configured slots per server",
+      "other_labels": "preserved campaign labels; consult the manuscript and result tables for the comparison scope"
+    },
+    "evaluated_ariparti_git_revision": "unavailable: the legacy per-instance archive did not record a Git revision",
+    "evaluated_launcher_sha256": "unavailable: the legacy per-instance archive did not record a launcher hash",
+    "evaluated_partitioner_sha256": "unavailable: the legacy per-instance archive did not record a partitioner hash",
+    "evaluated_random_seeds": "unavailable: the legacy per-instance archive did not record seed metadata",
+    "machine_details": "unavailable: the retained archive does not contain a complete historical machine inventory",
+    "run_repetitions": 1,
+    "timeout_semantics": "nominal leader-side wall-clock cutoff after MPI job startup; the leader checks the cutoff between communication cycles, so recorded completion can exceed the nominal value"
+  },
+  "cpu_usage_campaign": {
+    "directory": "distributed/cpu-usage",
+    "inventory": "distributed/cpu-usage/manifest.csv",
+    "evidence_status": "valid per-instance CPU-utilization measurements",
+    "campaign_relation": "dedicated CPU-instrumented solver runs whose CPU value, status, and runtime form a self-contained observation",
+    "measurement_effect": "CPU instrumentation can produce normal run-to-run variation in solver scheduling, status, and runtime",
+    "experimental_operation": "runs used normal experimental operation without intentionally added external workload",
+    "intended_use": "direct CPU-utilization analysis and reporting",
+    "record_interpretation": "use each CSV within the exact benchmark and row scope recorded in distributed/cpu-usage/manifest.csv"
+  },
+  "full_list_ablation_campaign": {
+    "metadata": "ablation/full-list-p8-1200s/result-metadata.json",
+    "source_provenance": "ablation/full-list-p8-1200s/source-provenance.json",
+    "integrity_manifest": "ablation/full-list-p8-1200s/SHA256SUMS",
+    "public_evidence_level": "validated aggregate and audit artifacts; per-instance campaign logs are not included"
+  },
+  "new_run_metadata": {
+    "output": "<output_dir>/run-metadata.json",
+    "implementation": "src/AriParti_launcher.py",
+    "records": [
+      "effective configuration",
+      "command line",
+      "Git commit when available",
+      "platform and Python information",
+      "solver and partitioner SHA-256 hashes",
+      "best-effort solver and partitioner version output"
+    ]
+  }
+}

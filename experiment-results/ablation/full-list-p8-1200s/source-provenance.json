@@ -1,0 +1,25 @@
+{
+  "schema_version": 3,
+  "authoritative_source_sha256": {
+    "final-combined-config-audit.csv": "608d8edce3d3f3a70afa7d5a4fb8b11096cbf927188d653f99d28c15c6e4e197",
+    "final-combined-consistency-audit.csv": "f2682100af0e9e3bca4401b4c3da1e2325519a92152cb1bd7552edaf0c4b4358",
+    "final-combined-delta.csv": "245bf9406b5a0a52f3e13ad928bd9b6f5492d1e53bc60db55c12e4e31835ce2a",
+    "final-combined-metadata-audit.csv": "f5a4946a5492b94644650fdfc1b8098639d6a4a53ad9e8fefc3fb7ee9a8d0a92",
+    "final-combined-paired-solved-set.csv": "5de5464dcd11fb727964e0c40cbbc8683126438cb8d25104fa151505c3f82573",
+    "final-combined-status-distribution.csv": "93c77505e5b7e9fd6af435fceaaa9a68debf2510f46ef65c24676a09a8bd4352",
+    "final-combined-summary.csv": "87b5f76ef3ef2cb3039bf2403409b4505b0325f00084feecebf2d7b4982a2f07",
+    "final-combined-table-draft.tex": "73ec24e8036c6185703d7d2332cacbc4b9220ea29b53b86aba24ad33b540ff49"
+  },
+  "derivation": {
+    "exact_public_copies": {
+      "config-audit.csv": "final-combined-config-audit.csv",
+      "consistency-audit.csv": "final-combined-consistency-audit.csv",
+      "delta.csv": "final-combined-delta.csv",
+      "metadata-audit.csv": "final-combined-metadata-audit.csv",
+      "paired-solved-set.csv": "final-combined-paired-solved-set.csv",
+      "status-distribution.csv": "final-combined-status-distribution.csv"
+    },
+    "summary.csv": "public schema projection of final-combined-summary.csv with the launcher and partitioner SHA-256 identities normalized to the distributed artifact files",
+    "table.tex": "complete rendering of all eight validated Full-versus-Disabled theory--mechanism comparisons"
+  }
+}

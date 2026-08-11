@@ -1,0 +1,9 @@
+theory,variant,full_solved,variant_solved,solved_gap_full_minus_variant,full_PAR-2,variant_PAR-2,par2_gap_variant_minus_full,signal
+QF_LRA,no_bicp,1723,1720,3,98686,109876,11190,strong-solved
+QF_LRA,no_clause_reduction,1723,1722,1,98686,100619,1933,strong-solved
+QF_LIA,no_bicp,12881,12483,398,1432372,2542383,1110011,strong-solved
+QF_LIA,no_clause_reduction,12881,12554,327,1432372,2338220,905848,strong-solved
+QF_NIA,no_bicp,20787,20382,405,11544246,12690780,1146534,strong-solved
+QF_NIA,no_clause_reduction,20787,20520,267,11544246,12320757,776511,strong-solved
+QF_NRA,no_bicp,11541,11448,93,1496897,1724833,227936,strong-solved
+QF_NRA,no_clause_reduction,11541,11533,8,1496897,1513858,16961,strong-solved

@@ -1,0 +1,9 @@
+scope,logic,file,records,reference_collection,reference_records,relation_to_reference,difference_records,difference_families,provenance_file
+all,QF_LIA,all/QF_LIA-all_list-13226.txt,13226,SMT-LIB 2023 Zenodo record 10607722,13226,exact match,0,,
+all,QF_LRA,all/QF_LRA-all_list-1753.txt,1753,SMT-LIB 2023 Zenodo record 10607722,1753,exact match,0,,
+all,QF_NIA,all/QF_NIA-all_list-25358.txt,25358,SMT-LIB 2023 Zenodo record 10607722,25443,proper subset,85,20230321-UltimateAutomizerSvcomp2023 (58); 20230328-sqrtmodinv-hoenicke (27),QF_NIA-provenance.md
+all,QF_NRA,all/QF_NRA-all_list-12134.txt,12134,SMT-LIB 2023 Zenodo record 10607722,12134,exact match,0,,
+pure-conjunction,QF_LIA,pure-conjunction/QF_LIA-pure_conjunction_list-4066.txt,4066,,,,,,
+pure-conjunction,QF_LRA,pure-conjunction/QF_LRA-pure_conjunction_list-337.txt,337,,,,,,
+pure-conjunction,QF_NIA,pure-conjunction/QF_NIA-pure_conjunction_list-1520.txt,1520,,,,,,
+pure-conjunction,QF_NRA,pure-conjunction/QF_NRA-pure_conjunction_list-6034.txt,6034,,,,,,

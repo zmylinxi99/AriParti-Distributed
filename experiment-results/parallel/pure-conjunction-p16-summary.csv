@@ -1,0 +1,7 @@
+scope,instances,both_solved,ariparti_only,cvc5_only,neither_solved,ariparti_faster,cvc5_faster,equal_runtime
+QF_LRA,337,337,0,0,0,123,214,0
+QF_LIA,4066,3908,35,4,119,1805,1995,108
+QF_NRA,6034,5717,96,2,219,2931,2703,83
+QF_NIA,1520,905,135,12,468,410,491,4
+linear,4403,4245,35,4,119,1928,2209,108
+nonlinear,7554,6622,231,14,687,3341,3194,87

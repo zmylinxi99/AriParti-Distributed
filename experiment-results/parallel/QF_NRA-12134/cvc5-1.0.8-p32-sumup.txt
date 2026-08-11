@@ -1,0 +1,5 @@
+sat 5569
+unsat 5784
+solved 11353
+failed 781
+PAR-2 1963182

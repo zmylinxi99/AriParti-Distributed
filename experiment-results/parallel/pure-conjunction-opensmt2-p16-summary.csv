@@ -1,0 +1,4 @@
+scope,instances,both_solved,ariparti_only,opensmt2_only,neither_solved,ariparti_faster,opensmt2_faster,equal_runtime
+QF_LRA,337,334,3,0,0,19,315,0
+QF_LIA,4066,3880,78,95,13,1311,2569,0
+linear,4403,4214,81,95,13,1330,2884,0

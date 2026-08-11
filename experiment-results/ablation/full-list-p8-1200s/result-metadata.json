@@ -1,0 +1,83 @@
+{
+  "artifact_bundle_version": 4,
+  "public_evidence_availability": {
+    "aggregate_recomputation_from_public_bundle": false,
+    "bundle_level": "validated aggregate and audit artifacts",
+    "evaluated_launcher_and_partitioner_files": "included at the repository paths recorded under evaluated_implementation_identity"
+  },
+  "evaluated_implementation_identity": {
+    "confirmation": "author-confirmed",
+    "launcher": {
+      "repository_path": "linux-pre_built/AriParti_launcher.py",
+      "sha256": "26a7f57c66f6361a60a78048abb55c3eb436675094f4115684905dee2a6e3443"
+    },
+    "partitioner": {
+      "repository_path": "linux-pre_built/binaries/partitioner-bin",
+      "sha256": "17f871c5afb70bdbfced171c2d1c5983f33557f7010709eae1ecd761594320f7"
+    },
+    "summary_identity_fields": [
+      "launcher_sha256",
+      "partitioner_sha256",
+      "required_partitioner_sha256"
+    ]
+  },
+  "result_semantics": {
+    "par2_advantage": "disabled_PAR-2 - full_PAR-2",
+    "positive_advantage": "favors the Full configuration",
+    "solved_advantage": "full_solved - disabled_solved"
+  },
+  "raw_archive_scope": {
+    "benchmark_lists": {
+      "QF_LIA": 13226,
+      "QF_LRA": 1753,
+      "QF_NIA": 25358,
+      "QF_NRA": 12134
+    },
+    "cores_per_instance": 8,
+    "runs_per_benchmark_instance_and_configuration": 1,
+    "timeout_seconds": 1200,
+    "variants": [
+      "full",
+      "no_bicp",
+      "no_clause_reduction"
+    ]
+  },
+  "manuscript_table_scope": {
+    "comparison_count": 8,
+    "coverage": "all validated Full-versus-Disabled theory--mechanism comparisons",
+    "reported_comparisons": [
+      {
+        "disabled_variant": "no_bicp",
+        "theory": "QF_LRA"
+      },
+      {
+        "disabled_variant": "no_clause_reduction",
+        "theory": "QF_LRA"
+      },
+      {
+        "disabled_variant": "no_bicp",
+        "theory": "QF_LIA"
+      },
+      {
+        "disabled_variant": "no_clause_reduction",
+        "theory": "QF_LIA"
+      },
+      {
+        "disabled_variant": "no_bicp",
+        "theory": "QF_NIA"
+      },
+      {
+        "disabled_variant": "no_clause_reduction",
+        "theory": "QF_NIA"
+      },
+      {
+        "disabled_variant": "no_bicp",
+        "theory": "QF_NRA"
+      },
+      {
+        "disabled_variant": "no_clause_reduction",
+        "theory": "QF_NRA"
+      }
+    ]
+  }
+}

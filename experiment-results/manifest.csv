@@ -1,0 +1,14 @@
+mode,category,dataset,directory,csv_files,records_per_csv
+distributed,data,QF_LIA-13226,distributed/data/QF_LIA-13226,5,13226
+distributed,data,QF_LRA-1753,distributed/data/QF_LRA-1753,5,1753
+distributed,data,QF_NIA-25358,distributed/data/QF_NIA-25358,3,25358
+distributed,data,QF_NRA-12134,distributed/data/QF_NRA-12134,9,12134
+distributed,cpu-usage,QF_LIA-13226,distributed/cpu-usage/QF_LIA-13226,2,
+distributed,cpu-usage,QF_LRA-1753,distributed/cpu-usage/QF_LRA-1753,2,
+distributed,cpu-usage,QF_NIA-25358,distributed/cpu-usage/QF_NIA-25358,1,
+distributed,cpu-usage,QF_NRA-12134,distributed/cpu-usage/QF_NRA-12134,2,
+parallel,data,QF_LIA-13226,parallel/QF_LIA-13226,18,13226
+parallel,data,QF_LRA-1753,parallel/QF_LRA-1753,18,1753
+parallel,data,QF_NIA-25358,parallel/QF_NIA-25358,10,25358
+parallel,data,QF_NRA-12134,parallel/QF_NRA-12134,11,12134
+ablation,evidence-bundle,full-list-p8-1200s,ablation/full-list-p8-1200s,7,
