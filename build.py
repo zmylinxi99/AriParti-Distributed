@@ -1,6 +1,7 @@
 import shutil
 import subprocess
 import errno
+import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.resolve()
@@ -27,7 +28,6 @@ PREBUILT_SOLVERS = [
     'cvc5-1.0.8-bin',
     'opensmt-2.5.2-bin',
     'z3-4.12.1-bin',
-    'z3pp-at-smt-comp-2023-bin',
 ]
 
 def log(msg):
@@ -57,7 +57,7 @@ def build_partitioner():
         shutil.rmtree(PARTITIONER_BUILD_DIR)
 
     # Run mk_make.py to prepare build
-    run_command(['python', 'scripts/mk_make.py'], cwd=PARTITIONER_DIR)
+    run_command([sys.executable, 'scripts/mk_make.py'], cwd=PARTITIONER_DIR)
 
     # Run make inside build/
     run_command(['make', '-j'], cwd=PARTITIONER_BUILD_DIR)
@@ -74,11 +74,11 @@ def copy_prebuilt_solvers():
                 copy_file(src_file, dest_file)
             except OSError as exc:
                 if exc.errno == errno.ETXTBSY and dest_file.exists():
-                    log(f"Skipping optional solver copy because destination is currently in use: {dest_file}")
+                    log(f"Skipping solver copy because destination is currently in use: {dest_file}")
                 else:
                     raise
         else:
-            log(f"Optional prebuilt solver not found: {src_file}")
+            raise FileNotFoundError(f"Missing redistributed backend solver: {src_file}")
 
 def main():
     log("=== AriParti Build Script Started ===")
@@ -103,7 +103,7 @@ def main():
         raise FileNotFoundError(f"Built partitioner binary not found at {PARTITIONER_BINARY_SRC}")
     copy_file(PARTITIONER_BINARY_SRC, PARTITIONER_BINARY_DEST)
 
-    # 5. Copy bundled backend solvers when available
+    # 5. Copy the documented, license-audited backend solver binaries.
     copy_prebuilt_solvers()
 
     log("Build completed successfully.")

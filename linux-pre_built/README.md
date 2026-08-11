@@ -7,17 +7,19 @@ This directory contains a prebuilt AriParti launcher package for Linux systems.
 - Python launcher and orchestration scripts are stored directly in this
   directory.
 - The AriParti partitioner executable is stored under `binaries/`.
-- Backend SMT solver executables are not redistributed in the FMSD journal
-  artifact. Obtain a compatible solver from its official distribution, review
-  its license, and copy it to `bin/binaries/` after running `build.py`.
+- Unmodified Linux x86-64 backend SMT solver executables are redistributed for
+  the versions used in the evaluation. Their provenance, licenses, and SHA-256
+  values are recorded in `../THIRD_PARTY_NOTICES.md` and
+  `../third-party-licenses/`.
 
 Current binaries:
 
 | Binary | Path |
 | --- | --- |
 | Partitioner | `binaries/partitioner-bin` |
+| cvc5 1.0.8 | `binaries/cvc5-1.0.8-bin` |
+| OpenSMT2 2.5.2 | `binaries/opensmt-2.5.2-bin` |
+| Z3 4.12.1 | `binaries/z3-4.12.1-bin` |
 
-The example configurations retain the backend executable names used for the
-reported experiments (`opensmt-2.5.2-bin` and `z3-4.12.1-bin`). To run an
-example, install the corresponding official solver build under that name or
-change `base_solver` to the executable you supplied.
+`build.py` copies all three backend executables into `bin/binaries/`. To use a
+different solver build, place it there and change `base_solver` accordingly.
