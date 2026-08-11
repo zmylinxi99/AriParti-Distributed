@@ -11,12 +11,25 @@ This directory contains small SMT-LIB instances and example configuration files.
   children, proof-UNSAT versus locally delegated regions, and parallel and
   distributed Full-UNSAT promotion without starting MPI processes or solver
   runs.
+- `test_prebuilt_package.py` checks the redistributed binary inventory,
+  checksums, license files, source/prebuilt script identity, and a delegated-node
+  state invariant.
+- `validate_evidence.py` validates benchmark/result inventories, validates all
+  CPU-instrumented records, and recomputes all reader-facing parallel,
+  distributed, pure-conjunction, and full-list ablation summaries from the
+  current repository snapshot.
 
-Run the state-transition checks from the repository root with:
+Run all read-only checks from the repository root with:
 
 ```bash
+python3 test/validate_evidence.py
 python3 test/test_partition_tree_invariants.py
+python3 test/test_prebuilt_package.py
 ```
+
+These commands do not launch MPI jobs or backend solver processes. The evidence
+validator may take several seconds because it scans 916,851 comparison records,
+79,387 CPU-instrumented records, and verifies the ablation bundle checksums.
 
 ## Configuration Notes
 
@@ -36,6 +49,7 @@ AriParti configuration. Set these fields to `false` only for controlled
 ablation runs.
 
 The backend names in the examples identify the solver versions used for the
-reported runs. Backend executables are not redistributed in the journal
-artifact; install an official solver build in `bin/binaries/` and either use
-the recorded filename or update `base_solver` before launching an example.
+reported runs. The Linux x86-64 journal artifact redistributes the corresponding
+license-audited upstream binaries; `build.py` copies them into `bin/binaries/`.
+See `THIRD_PARTY_NOTICES.md` for provenance, licenses, and checksums. To use a
+different build, place it in `bin/binaries/` and update `base_solver`.
