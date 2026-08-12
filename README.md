@@ -1,19 +1,39 @@
 # AriParti-Distributed: Distributed and Parallel SMT Solving with Dynamic Variable-Level Partitioning
 
-AriParti-Distributed is an open-source research framework for distributed and parallel Satisfiability Modulo Theories (SMT) solving. It extends the dynamic variable-level partitioning strategy from the CAV 2024 AriParti work into a two-tier Leader–Coordinator–Worker architecture for multi-server experiments.
+AriParti-Distributed extends the dynamic variable-level partitioning strategy
+of AriParti into a Leader–Coordinator–Worker architecture for parallel and
+multi-server SMT solving. It targets arithmetic theories, simplifies generated
+subtasks with Boolean and Interval Constraint Propagation (BICP), and delegates
+them to an SMT-LIB v2 backend such as cvc5, Z3, or OpenSMT2.
 
-The framework supports SMT solvers that accept the SMT-LIB v2 format (e.g., Z3, cvc5, OpenSMT2), and the current partitioning heuristic is designed for arithmetic theories. It incorporates Boolean and Interval Constraint Propagation (BICP) for subtask simplification.
+This repository contains the implementation and the supporting material for
+the associated manuscript: source code, a ready-to-run Linux x86-64 package,
+example configurations, benchmark manifests, experimental records, summaries,
+and consistency checks.
 
 - Associated manuscript: *Distributed and Parallel SMT Solving Based on Dynamic Variable-Level Partitioning*
-- Project: [AriParti GitHub](https://github.com/shaowei-cai-group/AriParti)
-- Distributed version: [AriParti-Distributed GitHub](https://github.com/zmylinxi99/AriParti-Distributed)
+- Original CAV 2024 project: [AriParti](https://github.com/shaowei-cai-group/AriParti)
+- This implementation and evidence repository: [AriParti-Distributed](https://github.com/zmylinxi99/AriParti-Distributed)
 
-The project includes code from the Z3 project (MIT License) and is itself released under the [MIT License](LICENSE.txt).
+The AriParti-Distributed source is released under the [MIT License](LICENSE.txt)
+and includes Z3-derived code under the MIT License. The redistributed backend
+solver binaries remain under their respective upstream licenses; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
-## Reviewer and Reader Quick Path
+## Start Here
 
-The following read-only checks require Python but do not start MPI jobs or
-backend solvers:
+Choose the path that matches what you want to do:
+
+| Goal | Starting point |
+| --- | --- |
+| Run the parallel example | `python3 linux-pre_built/AriParti_launcher.py test/configs/parallel-64.json` |
+| Build from source | `python3 build.py` |
+| Inspect the archived experiments | [`experiment-results/README.md`](experiment-results/README.md) |
+| Check benchmark provenance | [`benchmark-lists/README.md`](benchmark-lists/README.md) |
+| Configure a cluster run | [Distributed mode example](#distributed-mode-example) |
+
+Reviewers can validate the archived evidence and implementation invariants
+without starting MPI jobs or backend solvers:
 
 ```bash
 python3 test/validate_evidence.py
@@ -21,7 +41,7 @@ python3 test/test_partition_tree_invariants.py
 python3 test/test_prebuilt_package.py
 ```
 
-The first command validates the current benchmark/result inventory, recomputes
+The first command validates the benchmark/result inventory, recomputes
 all 79 parallel and distributed summary rows from 916,851 per-instance records,
 validates 79,387 records from seven CPU-instrumented runs, recomputes the nine
 pure-conjunction rows, and checks the full-list ablation bundle. See
@@ -31,44 +51,26 @@ for the recorded and unavailable experimental metadata.
 
 ## Features
 
-- **Dynamic Variable-Level Partitioning**
-  - Fine-grained divide-and-conquer parallelism.
-  - Designed for arithmetic formulas with limited Boolean branching, including pure-conjunction and almost-pure-conjunction instances.
-
-- **Boolean and Interval Constraint Propagation (BICP)**
-  - Combines Boolean and arithmetic propagation for subtask simplification.
-
-- **Two-Tier Distributed Architecture**
-  - Leader: Global task scheduling and inter-server coordination.
-  - Coordinators: Intra-server dynamic load balancing and parallel tree maintenance.
-  - Workers: Solve subtasks using backend SMT solvers.
-
-- **Flexible Solver Backend**
-  - Supports configurable SMT solver binaries that accept SMT-LIB v2 input.
-  - Tested with cvc5, Z3, and OpenSMT2.
-
-- **Parallel and Distributed Evaluation Support**
-  - Includes benchmark lists, example configurations, archived results, and
-    machine-readable evidence metadata.
-
-- **Multi-Theory Support**
-  - Handles QF_LRA, QF_LIA, QF_NRA, and QF_NIA benchmarks.
-
----
+| Capability | What it provides |
+| --- | --- |
+| Dynamic variable-level partitioning | Fine-grained divide-and-conquer parallelism for arithmetic formulas with limited Boolean branching, including pure and almost-pure conjunctions. |
+| BICP simplification | Combined Boolean and interval propagation on generated subtasks. |
+| Two-tier scheduling | A leader balances work across servers; coordinators maintain local partition trees and schedule solver workers. |
+| Configurable backends | Any executable that follows the documented SMT-LIB v2 invocation contract; the repository includes cvc5, OpenSMT2, and Z3 binaries. |
+| Parallel and distributed modes | Single-node multicore solving and multi-node solving through Open MPI. |
+| Arithmetic theories | QF_LRA, QF_LIA, QF_NRA, and QF_NIA benchmark workflows. |
 
 ## Build Instructions
 
-### Requirements
+### Runtime Requirements
 
 * Python 3.8 or later
-* GCC/Clang with C++17 support
-* CMake and Make
-* GLIBC version >= 2.29
-* MPI (e.g., OpenMPI)
+* Open MPI
 * python3-mpi4py
-* One of the bundled Linux x86-64 backend solvers, or another installed SMT
-  solver that accepts SMT-LIB v2 input
-* Unix-like OS (tested on Ubuntu 20.04 and 22.04)
+* Linux x86-64 for the bundled executables (tested on Ubuntu 20.04 and 22.04)
+* GLIBC 2.30 or later for the bundled partitioner
+* A bundled backend solver or another executable that follows the
+  [custom solver contract](#custom-solver-configuration)
 
 Install Python MPI bindings:
 
@@ -76,9 +78,10 @@ Install Python MPI bindings:
 sudo apt-get install python3-mpi4py
 ```
 
----
+Building the partitioner from source also requires GCC or Clang with C++17
+support and Make.
 
-### Quick Build Command
+### Build from Source
 
 Run the build script from the project root:
 
@@ -86,9 +89,7 @@ Run the build script from the project root:
 python3 build.py
 ```
 
----
-
-### Build Outputs
+### Build Output
 
 After a successful build, you will have:
 
@@ -108,16 +109,17 @@ bin/
     └── z3-4.12.1-bin
 ```
 
-The partitioner binary `partitioner-bin` is built automatically and required for AriParti's distributed solving.
-
----
+The partitioner binary `partitioner-bin` is built automatically and is required
+for both parallel and distributed AriParti runs.
 
 ### Base Solver Setup
 
-AriParti requires one or more SMT solvers in `bin/binaries/`. For Linux x86-64,
-the journal artifact redistributes unmodified upstream binaries for cvc5 1.0.8,
-OpenSMT2 2.5.2, and Z3 4.12.1. `build.py` copies these binaries from
-`linux-pre_built/binaries/` into `bin/binaries/`.
+AriParti resolves `base_solver` relative to the `binaries/` directory beside
+the launcher being used. The source build produced by `build.py` therefore uses
+`bin/binaries/`, while the ready-to-run package uses
+`linux-pre_built/binaries/`. For Linux x86-64, the repository redistributes
+unmodified upstream binaries for cvc5 1.0.8, OpenSMT2 2.5.2, and Z3 4.12.1;
+`build.py` copies them into `bin/binaries/`.
 
 The backend binaries are third-party software and are not covered by the
 AriParti-Distributed MIT license. Their upstream sources, exact release assets,
@@ -125,7 +127,6 @@ copyright notices, license texts, and SHA-256 values are recorded in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Review those terms before
 using or redistributing the artifact. On another platform, or to use a different
 solver build, replace the bundled executable and update `base_solver`.
-
 
 ### Custom Solver Configuration
 
@@ -135,14 +136,17 @@ You can configure a custom SMT solver binary if it:
 * Exits successfully and prints exactly `sat` or `unsat` for ordinary inputs;
   for an input containing `(get-model)`, the first output line must be the
   status and subsequent lines may contain the model
-* Is placed as an executable in `bin/binaries/`
-* Matches the name specified in your `config.json`:
+* Is placed in the `binaries/` directory beside the launcher being used
+  (`bin/binaries/` after a source build or `linux-pre_built/binaries/` for the
+  prebuilt package)
+* Matches the basename specified in your `config.json`:
 
 ```json
 "base_solver": "your-solver-binary-name"
 ```
 
-For example, if you place a custom build of Z3 4.13.0 as `bin/binaries/z3-4.13.0-bin`, set:
+For example, if you place a custom build of Z3 4.13.0 beside the selected
+launcher as `binaries/z3-4.13.0-bin`, set:
 
 ```json
 "base_solver": "z3-4.13.0-bin"
@@ -153,154 +157,98 @@ therefore needs to support this invocation contract directly, or be wrapped by
 a small adapter executable. A backend `unknown` response is not a decisive
 result and the current worker treats it as a subprocess error.
 
----
-
 ## Directory Structure
 
-```
-AriParti-Distributed/
-├── src/                            # Core distributed SMT solving framework
-│   ├── AriParti_launcher.py        # Entry point for multi-node distributed runs
-│   ├── leader.py                   # Leader process: global task scheduling & coordination
-│   ├── coordinator.py              # Coordinator process: intra-server scheduling
-│   ├── dispatcher.py               # Orchestrates leader, coordinators, and workers
-│   ├── partition_tree.py           # Partition tree maintenance & UNSAT propagation
-│   ├── control_message.py          # MPI message definitions for control flow
-│   ├── partitioner.py              # Python wrapper for the partitioner process
-│   └── partitioner/                # C++ partitioner source tree
-│
-├── linux-pre_built/                # Prebuilt launcher and AriParti partitioner
-│
-├── benchmark-lists/                # Benchmark set listings for batch experiments
-│   ├── all/                        # Full benchmark lists (LRA, LIA, NRA, NIA)
-│   │   ├── QF_LRA-all_list-1753.txt
-│   │   ├── QF_LIA-all_list-13226.txt
-│   │   ├── QF_NRA-all_list-12134.txt
-│   │   └── QF_NIA-all_list-25358.txt
-│   └── pure-conjunction/           # Filtered lists for pure conjunction instances
-│       ├── QF_LRA-pure_conjunction_list-337.txt
-│       ├── QF_LIA-pure_conjunction_list-4066.txt
-│       ├── QF_NRA-pure_conjunction_list-6034.txt
-│       └── QF_NIA-pure_conjunction_list-1520.txt
-│
-├── test/                           # Test suite & benchmark instances
-│   ├── configs/                     # Example JSON configurations
-│   ├── instances/                  # SMT-LIB v2 test formulas
-│   ├── validate_evidence.py        # Read-only current-snapshot evidence checker
-│   └── output/                     # Auto-generated test outputs
-│
-├── experiment-results/             # Collected experimental results
-│   ├── metadata.json               # Known and unavailable campaign metadata
-│   ├── distributed/                # Distributed mode results (multi-node)
-│   │   ├── cpu-usage/              # Validated CPU-instrumented per-instance runs
-│   │   ├── data/                   # Raw results without CPU usage
-│   │   └── sumup/                  # Summary tables (4 theories)
-│   ├── parallel/                   # Parallel mode results (single-node)
-│   └── ablation/                   # Full-list p8/1200s mechanism evidence
-│
-├── build.py                        # Build script for packaging components
-├── README.md                       # Main project documentation (this file)
-└── LICENSE.txt                     # MIT License
-
-```
-
-## Evaluation Results
-
-The experiment archive is stored under `experiment-results/`. It contains
-per-instance records for the archived parallel and distributed comparisons and
-a validated CPU-utilization campaign and aggregate bundle for the full-list
-mechanism ablations. Companion README files document the schemas, aggregation
-rules, measurement scope, and validation commands.
-
-## Evaluation Result Map
-
-Paths are relative to this repository.
-
-| Evidence | Repository path and role |
-| --- | --- |
-| Benchmark universe | `benchmark-lists/manifest.csv` and `benchmark-lists/all/` define the four arithmetic lists used for scope accounting and the mechanism-comparison archive. [`benchmark-lists/QF_NIA-provenance.md`](benchmark-lists/QF_NIA-provenance.md) documents why the evaluated 25,358-instance QF_NIA list differs from the later 25,443-instance frozen SMT-LIB 2023 list and records the complete 85-instance difference. |
-| Pure-conjunction subset | The current outcome table uses the QF_LRA, QF_LIA, QF_NRA, and QF_NIA lists under `benchmark-lists/pure-conjunction/`; their p16 cvc5 outcomes are recoverable from the corresponding per-configuration CSVs. The two linear OpenSMT2 joins used with the CAV-style scatter panel are summarized in `experiment-results/parallel/pure-conjunction-opensmt2-p16-summary.csv`. |
-| Parallel comparisons by theory and backend | The complete-configuration tables use the QF_LRA, QF_LIA, QF_NRA, and QF_NIA CSVs and summaries under `experiment-results/parallel/`. |
-| Distributed comparison and resource levels | The manuscript reports selected p512 measurements on all four theories and the QF_NRA 32--512-slot sweep under `experiment-results/distributed/`. |
-| CPU utilization | `experiment-results/distributed/cpu-usage/` contains seven independent CPU-instrumented runs with 79,387 valid per-instance observations. Its README and manifest define the measurement relationship, exact coverage, status counts, and file hashes. |
-| BICP and clause-reduction configuration comparisons | `experiment-results/ablation/full-list-p8-1200s/` preserves the aggregate and audit artifacts for all eight full-list comparisons used by the current manuscript. |
-| Result inventory | `experiment-results/manifest.csv` inventories the archived result directories and their record counts. |
-| Experimental metadata | `experiment-results/metadata.json` records aggregation semantics, known configuration facts, explicit legacy metadata gaps, and the metadata captured by new runs. |
-| Runnable implementation and examples | `src/`, `linux-pre_built/`, and `test/configs/` provide the implementation, a prebuilt Linux launcher/partitioner runtime, three license-audited backend solver binaries, and example launcher configurations. |
-
-The older CAV 2024 artifact evaluation package is archived separately on
-[Zenodo](https://doi.org/10.5281/zenodo.10947054). The evidence described above
-belongs to the distributed implementation in this repository.
-
-## Full-List Mechanism-Ablation Evidence
-
-The full-list BICP and clause-reduction evidence is located at:
-
 ```text
-experiment-results/ablation/full-list-p8-1200s/
+AriParti-Distributed/
+├── src/                 # Python runtime and C++ partitioner source
+├── linux-pre_built/     # Linux launcher, partitioner, and backend binaries
+├── benchmark-lists/     # Full and pure-conjunction benchmark manifests
+├── experiment-results/  # Parallel, distributed, CPU, and ablation records
+├── test/                # Example formulas, configurations, and validators
+├── third-party-licenses/
+├── build.py
+└── README.md
 ```
 
-The archive covers the four artifact benchmark lists with eight cores per
-benchmark instance and a 1,200-second timeout. `delta.csv` and `table.tex`
-report all eight Full-versus-Disabled aggregate comparisons. Verify the
-bundle's file integrity with:
+The README in each data or package directory describes its internal layout.
 
-```bash
-(cd experiment-results/ablation/full-list-p8-1200s && sha256sum --check SHA256SUMS)
-```
+## Experimental Evidence
 
-### Result Interpretation
+`experiment-results/` contains the records behind the manuscript's parallel
+and distributed comparisons, CPU-utilization measurements, and mechanism
+ablations. Use the map below to go directly to the relevant material. Paths are
+relative to this repository.
 
-The solved-count delta is `full - ablated`, while the PAR-2 delta is
-`ablated - full`; positive values therefore favor the full configuration. The
-eight rendered rows are aggregate results for the stated theory, benchmark
-list, core count, and timeout. See the bundle README and `result-metadata.json`
-for the complete result scope.
+| Question | Repository path and contents |
+| --- | --- |
+| Which benchmarks were evaluated? | `benchmark-lists/manifest.csv` and `benchmark-lists/all/` define the four arithmetic lists. [`benchmark-lists/QF_NIA-provenance.md`](benchmark-lists/QF_NIA-provenance.md) explains the 85-instance difference between the evaluated QF_NIA list and the later frozen SMT-LIB 2023 list. |
+| Where are the parallel results? | `experiment-results/parallel/` contains per-instance CSVs and summaries by theory, backend, and core count. Its two top-level pure-conjunction summary CSVs contain the derived p16 comparisons. |
+| Where are the distributed results? | `experiment-results/distributed/` contains the p512 measurements for all four theories and the QF_NRA 32--512-slot sweep. |
+| Where are the CPU measurements? | `experiment-results/distributed/cpu-usage/` contains 79,387 observations from seven instrumented runs, with an inventory and interpretation guide. |
+| Where are the BICP and clause-reduction comparisons? | `experiment-results/ablation/full-list-p8-1200s/` contains all eight full-versus-disabled aggregate comparisons, the manuscript table, metadata, and checksums. Positive solved-count and PAR-2 deltas favor the full configuration. |
+| What metadata are available? | `experiment-results/metadata.json` records aggregation rules, known campaign settings, and unavailable legacy fields. `experiment-results/manifest.csv` inventories result directories and record counts. |
+
+The earlier CAV 2024 artifact evaluation package is archived separately on
+[Zenodo](https://doi.org/10.5281/zenodo.10947054).
 
 ## Reproducibility Levels
 
 - **Verify the published evidence:** run `python3 test/validate_evidence.py`.
   This is local and does not require the benchmark corpus, MPI, or solver runs.
 - **Check implementation invariants and packaging:** run the other two commands
-  in the reviewer quick path above.
+  under [Start Here](#start-here).
 - **Run AriParti on a supplied formula:** build or use the Linux prebuilt
   package, update an example configuration, and follow the parallel or
   distributed launch instructions below.
-- **Repeat the full evaluation:** obtain the SMT-LIB benchmark corpus identified
-  by `benchmark-lists/manifest.csv`, provide equivalent compute resources, and
-  use the recorded configuration scope. The repository does not claim that the
-  complete legacy machine inventory or executable hashes are recoverable; the
-  exact gaps are marked as unavailable in `experiment-results/metadata.json`.
+- **Repeat the full evaluation:** obtain the SMT-LIB corpus identified by
+  `benchmark-lists/manifest.csv`, provide equivalent compute resources, and use
+  the recorded configuration. Missing legacy machine, executable, and seed
+  metadata are listed in `experiment-results/metadata.json`.
 
 ## Distributed & Parallel Usage
 
-AriParti supports both parallel (single-node) and distributed (multi-node) solving. The execution mode is determined by the `mode` field in the configuration JSON.
-
----
+AriParti supports parallel solving on one machine and distributed solving
+across several machines. Set the execution mode in the configuration JSON.
 
 ### Configuration JSON Overview
 
-| Field               | Description                                                                                                                    | Required in Mode      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
-| `formula_file`      | Absolute path to the SMT-LIB v2 formula to solve                                                                               | Parallel, Distributed |
-| `output_dir`        | Absolute path to the directory for saving logs and outputs                                                                     | Parallel, Distributed |
-| `timeout_seconds`   | Total solving timeout in seconds                                                                                               | Parallel, Distributed |
-| `base_solver`       | Name of the solver binary in `bin/binaries/` (e.g., `cvc5-1.0.8-bin`)                                                          | Parallel, Distributed |
-| `mode`              | Execution mode: `"parallel"` or `"distributed"`                                                                                | Parallel, Distributed |
-| `parallel_core`     | Number of cores to use for single-node parallel solving (**recommended ≥ 8 cores**)                                            | Parallel only         |
-| `bicp_enabled`      | Enable Boolean and Interval Constraint Propagation in the partitioner; defaults to `true`                                      | Optional             |
-| `clause_reduction_enabled` | Enable theory-level clause reduction in generated subtasks; defaults to `true`                                         | Optional             |
-| `network_subnet`  | IPv4 subnet (CIDR) used for MPI TCP communication (e.g., `192.0.2.0/24`)                                    | Distributed only      |
-| `worker_node_ips`   | List of IP addresses of worker nodes                                                                                           | Distributed only      |
-| `worker_node_cores` | Number of available cores on each worker node (same order as `worker_node_ips`, **recommended ≥ 8 cores on the first server**) | Distributed only      |
+Common fields:
 
----
+| Field | Meaning | Requirement or default |
+| --- | --- | --- |
+| `formula_file` | Absolute or working-directory-relative path to the SMT-LIB v2 input | Required |
+| `timeout_seconds` | Total solving timeout in seconds | Required |
+| `base_solver` | Basename of the executable in the launcher's adjacent `binaries/` directory | Required |
+| `mode` | `"parallel"` or `"distributed"` | Required |
+| `output_dir` | Absolute or working-directory-relative output directory | `./output` |
+| `bicp_enabled` | Enable BICP in the partitioner | `true` |
+| `clause_reduction_enabled` | Enable theory-level clause reduction | `true` |
+| `output_total_time` | Print total launcher elapsed time | `false` |
+| `ablation` | Advanced mechanism switches | Disabled |
+
+Mode-specific fields:
+
+| Field | Meaning | Mode |
+| --- | --- | --- |
+| `parallel_core` | Number of cores used on one machine; at least 8 is recommended | Parallel |
+| `network_subnet` | IPv4 subnet for MPI TCP traffic, such as `192.0.2.0/24` | Distributed |
+| `worker_node_ips` | Worker-node addresses | Distributed |
+| `worker_node_cores` | Available cores on each listed node, in the same order as `worker_node_ips` | Distributed |
+| `isolated_coordinator_cores` | First-node cores reserved for the isolated coordinator when that node has at least 16 cores | Distributed; defaults to 8 |
+
+Relative paths are resolved from the directory in which the launcher is
+started. In distributed mode, all MPI ranks must resolve the formula and output
+paths consistently. The launcher places the leader and an isolated coordinator
+on the first listed node and reserves 2, 4, or 8 cores there according to the
+available-core count; an explicit `isolated_coordinator_cores` value is honored
+when the first node has at least 16 cores.
 
 ### Parallel Mode Example
 
 This mode runs AriParti on a single machine using multiple cores.
 
-**Configuration:**
+Example configuration:
 
 ```json
 {
@@ -315,19 +263,17 @@ This mode runs AriParti on a single machine using multiple cores.
 }
 ```
 
-**Launch Command:**
+Launch it from the repository root:
 
 ```bash
 python3 linux-pre_built/AriParti_launcher.py test/configs/parallel-64.json
 ```
 
----
-
 ### Distributed Mode Example
 
 This mode runs AriParti across multiple nodes in a cluster.
 
-**Configuration:**
+Example configuration:
 
 ```json
 {
@@ -352,13 +298,12 @@ This mode runs AriParti across multiple nodes in a cluster.
 }
 ```
 
-**Launch Command:**
+After replacing the documentation addresses, launch it from the repository
+root:
 
 ```bash
 python3 linux-pre_built/AriParti_launcher.py test/configs/distributed-128.json
 ```
-
----
 
 ### Ablation Switches
 
@@ -375,12 +320,12 @@ For mechanism-ablation runs, the launcher also accepts:
   Boolean-driven propagation and BICP-derived Boolean facts/simplifications
   while keeping arithmetic interval propagation, the original formula
   constraints, and partition-path bounds.
-- `clause_reduction_enabled: false` to keep value-based subtask extraction but
-  skip theory-level clause simplification and dominated-clause removal.
+- `clause_reduction_enabled: false` keeps value-based subtask extraction but
+  skips theory-level clause simplification and dominated-clause removal.
 
-At the current repository state, `bicp_enabled: false` is a non-default
-ablation configuration and requires an explicit ablation opt-in. The result
-directory contains the completed full-list p8/1200-second `no_bicp` rows in
+`bicp_enabled: false` requires
+`"ablation": {"allow_no_bicp_ablation": true}` as an explicit opt-in. The
+result directory contains the full-list p8/1200-second `no_bicp` rows in
 `experiment-results/ablation/full-list-p8-1200s/`, whose README documents the
 configuration and validation scope.
 
@@ -389,68 +334,48 @@ configuration, command line, git commit when available, platform information,
 best-effort `--version` output, and SHA-256 hashes for the configured solver
 and partitioner binaries.
 
----
+### Evaluated Heuristic Defaults
+
+The manuscript evaluates the following scheduling and simplification defaults.
+The source locations in the final column are the implementation reference.
+
+| Mechanism | Evaluated behavior | Source |
+| --- | --- | --- |
+| Terminate on demand | Child progress values are 0 (unscheduled), 1 (running), and 2 (decisive). Thresholds for the reachable progress sums 0--3 are 1200, 400, 300, and 200 seconds. The root is exempt, and a parent is retained when its elapsed time exceeds the remaining run budget. | `src/coordinator.py`: `terminate_threshold`, `check_terminate_node` |
+| Partitioner seeds | Interactive coordinators use seed 0; the isolated coordinator uses seed 1. These defaults apply to runs from this source snapshot. Legacy campaign seeds were not retained and are marked unavailable in `experiment-results/metadata.json`. | `src/coordinator.py`: `parti_seed` |
+| Split boundary | Prefer a seeded-random candidate non-equality literal; otherwise try zero, a finite midpoint, a one-sided offset of 128, or zero for a fully unbounded interval, in that order. Finite widths above 10 round the midpoint upward; a non-interior boundary is rejected. The default partition seed is 0. | `src/partitioner/src/math/subpaving/subpaving_t_def.h`: `init_partition` and boundary selection |
+| BICP | Root and non-root propagation budgets are 10 and 5 seconds. | `src/partitioner/src/math/subpaving/subpaving_t_def.h`: `m_root_max_prop_time`, `m_max_prop_time` |
+| Clause domination | Skip the quadratic pass above 10,000 input clauses. | `src/partitioner/src/math/subpaving/subpaving_t_def.h`: `remove_dominated_clauses` |
+| Initial frontier | Attempt to expose one open task per interactive coordinator for at most 20 seconds. | `src/coordinator.py`: `pre_partition` |
+| Migration tabu | Query donors in round-robin order and exclude a coordinator for 3 seconds after its latest assignment or successful split. | `src/leader.py`: `split_tabu` and donor selection |
+| Transfer eligibility | Follow a unique open child. If both children are open, transfer the right child only when both have run for at least 5 seconds and each exceeds either 25 seconds or the mean runtime of backend-UNSAT leaves. | `src/partition_tree.py`: `satisfy_split_requirement`, `select_split_node` |
 
 ### Network Subnet Configuration
 
-AriParti uses MPI (`mpiexec`) for inter-node communication. The `network_subnet` field in your configuration JSON specifies the IPv4 subnet (CIDR notation) that Open MPI should use for both its OOB and BTL TCP channels.
+AriParti uses Open MPI (`mpiexec`) for inter-node communication.
+`network_subnet` selects the IPv4 network used by both the OOB control channel
+and BTL data channel. Every worker address must be reachable through this
+network.
 
-To discover the correct subnet, run:
+Find the address and prefix of the intended network interface with:
 
 ```bash
 ip -4 addr show
-```
-
-and identify the address and prefix of the NIC you want to use (for example,
-`192.0.2.11/24` in a documentation-only configuration). Use the subnet portion
-(for example, `192.0.2.0/24`) for `network_subnet`. Replace all documentation
-addresses with the actual private addresses of your cluster. You can confirm
-the prefix with:
-
-```bash
 ip route
 ```
 
-The launcher forwards this value via `--mca oob_tcp_if_include` and `--mca btl_tcp_if_include`, and forces `--mca btl self,tcp` so all MPI traffic stays on the TCP fabric you specify.
+For an interface address such as `192.0.2.11/24`, configure the subnet as
+`192.0.2.0/24`. Replace the documentation addresses in the example with your
+cluster's addresses and verify that the nodes can reach one another. Open MPI
+also accepts a comma-separated list when several networks are required, for
+example `"10.1.0.0/16,172.16.0.0/16"`.
 
----
-
-### Important Notes for Multi-Server Setup
-
-* Every node must have an address inside `network_subnet` and be able to reach the others over that network.
-* Open MPI accepts comma-separated subnets when you need to enable multiple networks (e.g., `"10.1.0.0/16,172.16.0.0/16"`).
-* If you require additional MCA tuning (such as exclusions), supply extra flags via `OMPI_MCA` environment variables or adjust the launcher accordingly.
-
----
-
-### Why This Change is Necessary
-
-This configuration ensures that:
-
-* Both control (OOB) and data (BTL) traffic stay on the same routed subnet.
-* MPI uses the TCP transport explicitly, avoiding surprises from other fabrics.
-
----
-
-### Checklist for Distributed Runs
-
-* Verify that all nodes can ping each other over the subnet specified in `network_subnet`.
-* Set `network_subnet` correctly in `config.json`, updating it whenever the cluster topology changes.
-* Keep any additional MCA overrides consistent across all servers.
+The launcher passes the selected network to `oob_tcp_if_include` and
+`btl_tcp_if_include` and selects the `self,tcp` BTL transports. Apply any
+additional `OMPI_MCA` overrides consistently on every node.
 
 ### Outputs
 
 * Logs: `<output_dir>/logs`
 * Rankfile: `<output_dir>/rankfile`
 * Solver results and intermediate data: `<output_dir>/`
-
----
-
-### Summary Table
-
-| Mode        | Field to Configure                                          | Example Command                                        |
-| ----------- | ----------------------------------------------------------- | ------------------------------------------------------ |
-| Parallel    | `parallel_core`                                             | `python3 linux-pre_built/AriParti_launcher.py parallel.json`    |
-| Distributed | `network_subnet`, `worker_node_ips`, `worker_node_cores` | `python3 linux-pre_built/AriParti_launcher.py distributed.json` |
-
----

@@ -1,18 +1,17 @@
 # Third-Party Executables and Notices
 
-The AriParti-Distributed project is licensed separately under `LICENSE.txt`.
-The Linux x86-64 artifact also contains the unmodified third-party executables
-listed below. These executables remain under their respective upstream
-copyrights and licenses; the AriParti-Distributed license does not replace or
-restrict those terms.
+`LICENSE.txt` covers AriParti-Distributed. The bundled Linux x86-64 backend
+executables retain their upstream copyrights and licenses, as listed below.
 
-## Redistributed backend executables
+## Redistributed Backend Executables
 
 | Artifact file | Upstream release asset | Provenance check | SHA-256 | License |
 | --- | --- | --- | --- | --- |
 | `linux-pre_built/binaries/cvc5-1.0.8-bin` | [`cvc5-Linux` from cvc5 1.0.8](https://github.com/cvc5/cvc5/releases/download/cvc5-1.0.8/cvc5-Linux) | Byte-for-byte identical to the upstream asset | `fe74a3ae70462d715871918c6277c88b10a1335ab55ecfb53a10ff5aa501d20a` | Modified BSD; see `third-party-licenses/cvc5-1.0.8-COPYING` and the dependency notices below |
 | `linux-pre_built/binaries/opensmt-2.5.2-bin` | [`opensmt` in the OpenSMT2 2.5.2 Linux archive](https://github.com/usi-verification-and-security/opensmt/releases/download/v2.5.2/opensmt-2.5.2-x64-linux.tar.bz2) | Byte-for-byte identical to the executable extracted from the upstream archive | `58461438f02fa0cc8f5bf2370c6d122a66e3dfff53fbd452eb4e17481f8e9a5b` | MIT; see `third-party-licenses/opensmt-2.5.2-LICENSE` |
 | `linux-pre_built/binaries/z3-4.12.1-bin` | [`bin/z3` in the official Z3 4.12.1 manylinux1 wheel](https://github.com/Z3Prover/z3/releases/download/z3-4.12.1/z3_solver-4.12.1.0-py2.py3-none-manylinux1_x86_64.whl) | Extracted without modification from the upstream release asset | `b14068b578fe6f2ad90d46183ba73b1c4ee071de8caccc455b9fcc6d3eb1d320` | MIT; see `third-party-licenses/z3-4.12.1-LICENSE.txt` |
+
+## Verification
 
 The SHA-256 values of the downloaded OpenSMT2 and Z3 release assets used for
 the provenance comparison are respectively:
@@ -30,7 +29,7 @@ They can also be verified directly from the repository root with:
 (cd linux-pre_built/binaries && sha256sum --check ../../third-party-licenses/SHA256SUMS)
 ```
 
-## Copyright notices
+## Copyright Notices
 
 - cvc5 is copyright 2009--2023 by the cvc5 authors, contributors, and their
   institutional affiliations. The modified BSD notice and disclaimer are
@@ -43,7 +42,7 @@ They can also be verified directly from the repository root with:
 
 No upstream project or contributor endorses AriParti-Distributed.
 
-## cvc5 linked components
+## cvc5 Linked Components
 
 The redistributed cvc5 file is the unmodified official 1.0.8 Linux release
 asset. Its `--version` output reports static linkage with CaDiCaL, Editline,
@@ -74,7 +73,7 @@ Users who modify or further redistribute these executables are responsible for
 complying with the applicable upstream terms, including the LGPL provisions
 described by cvc5 for its linked components.
 
-## OpenSMT2 linked components
+## OpenSMT2 Linked Components
 
 The redistributed OpenSMT2 executable is the unmodified statically linked file
 from the official 2.5.2 Linux release archive. The OpenSMT2 2.5.2 source uses
@@ -91,7 +90,7 @@ The corresponding OpenSMT2 source is available from the immutable
 The upstream binary and release metadata do not encode the exact GMP package
 revision used to produce that static build.
 
-## AriParti partitioner
+## AriParti Partitioner
 
 `linux-pre_built/binaries/partitioner-bin` is an AriParti-Distributed component
 built from the Z3-derived source under `src/partitioner/`. Its SHA-256 value is

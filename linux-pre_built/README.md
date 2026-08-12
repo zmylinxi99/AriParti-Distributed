@@ -1,6 +1,9 @@
 # Linux Prebuilt Package
 
-This directory contains a prebuilt AriParti launcher package for Linux systems.
+This directory packages the AriParti launcher, partitioner, and backend solvers
+for Linux x86-64. It requires Python 3.8 or later, Open MPI, `python3-mpi4py`,
+and GLIBC 2.30 or later. The launcher uses Linux-specific CPU affinity and Open
+MPI options.
 
 ## Contents
 
@@ -21,5 +24,15 @@ Current binaries:
 | OpenSMT2 2.5.2 | `binaries/opensmt-2.5.2-bin` |
 | Z3 4.12.1 | `binaries/z3-4.12.1-bin` |
 
-`build.py` copies all three backend executables into `bin/binaries/`. To use a
-different solver build, place it there and change `base_solver` accordingly.
+From the repository root, run the parallel example with:
+
+```bash
+python3 linux-pre_built/AriParti_launcher.py test/configs/parallel-64.json
+```
+
+The launcher resolves `base_solver` in this directory's `binaries/` folder. To
+use another solver build, place its executable there and update `base_solver`.
+
+Running `python3 build.py` from the repository root instead compiles the
+partitioner and creates a separate `bin/` package. The build copies the three
+bundled backend executables into `bin/binaries/`.
