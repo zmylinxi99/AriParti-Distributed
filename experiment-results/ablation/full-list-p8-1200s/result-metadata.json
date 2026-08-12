@@ -1,12 +1,11 @@
 {
   "artifact_bundle_version": 4,
   "public_evidence_availability": {
-    "aggregate_recomputation_from_public_bundle": false,
     "bundle_level": "validated aggregate and audit artifacts",
+    "scope": "complete results and validation evidence for all eight reported Full-versus-Disabled comparisons",
     "evaluated_launcher_and_partitioner_files": "included at the repository paths recorded under evaluated_implementation_identity"
   },
   "evaluated_implementation_identity": {
-    "confirmation": "author-confirmed",
     "launcher": {
       "repository_path": "linux-pre_built/AriParti_launcher.py",
       "sha256": "26a7f57c66f6361a60a78048abb55c3eb436675094f4115684905dee2a6e3443"

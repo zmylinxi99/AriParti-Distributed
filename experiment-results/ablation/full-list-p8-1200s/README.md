@@ -1,12 +1,9 @@
 # Full-List p8/1200-Second Mechanism-Ablation Evidence
 
-This directory preserves the complete, validated aggregate results for the
-full-list mechanism-ablation campaigns. Both `delta.csv` and `table.tex` cover
-all eight Full-versus-Disabled comparisons formed by four benchmark theories
-and two mechanisms.
-
-This directory is the aggregate and audit bundle for the study. Its release
-scope is aggregate-level; per-instance campaign logs are outside this bundle.
+This directory contains the aggregate results and audit files for eight
+Full-versus-Disabled comparisons: BICP and clause reduction on each of four
+benchmark theories. `delta.csv` stores the comparisons, and `table.tex` renders
+the manuscript table. Per-instance campaign logs are not part of this bundle.
 
 ## Experimental Scope
 
@@ -61,10 +58,10 @@ aggregate sums in seconds over the corresponding complete benchmark list.
 - `metadata-audit.csv`, `config-audit.csv`, and `consistency-audit.csv`:
   validation outputs for the campaign data
 - `result-metadata.json`: machine-readable result scope and semantics
-- `source-provenance.json`: hashes of the immutable intake files from which the
-  compact public bundle was derived
+- `source-provenance.json`: SHA-256 identities of the public evidence files and
+  the evaluated launcher and partitioner
 
-`table.tex` is generated from all eight validated comparison rows.
+`table.tex` is generated from the eight comparison rows in `delta.csv`.
 
 Verify the result files from the repository root with:
 
