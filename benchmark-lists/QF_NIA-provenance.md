@@ -32,7 +32,7 @@ filtering benchmarks after observing solver results. All QF_NIA results in the
 manuscript are reported over the recorded 25,358-instance experimental list,
 not over the later 25,443-instance frozen collection.
 
-## Integrity information
+## Integrity Information
 
 The following SHA-256 values identify the exact lists used in the comparison:
 

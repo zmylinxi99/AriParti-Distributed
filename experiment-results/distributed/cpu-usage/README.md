@@ -1,18 +1,18 @@
 # CPU-Utilization Measurements
 
-This directory contains seven valid CPU-instrumented solver runs and 79,387
-per-instance observations. Every CSV row is a self-contained measurement whose
-CPU value, status, and runtime are the authoritative records for this campaign.
+This directory contains 79,387 per-instance observations from seven
+CPU-instrumented solver runs. Each row pairs one CPU-utilization measurement
+with the status and runtime observed in the same run.
 
-## Measurement relationship
+## How to Interpret the Measurements
 
-Collecting CPU utilization requires instrumentation and can produce normal
-run-to-run variation in process scheduling, solver status, and runtime. The runs
-used normal experimental operation without intentionally added external
-workload. The recorded data are suitable for direct CPU-utilization analysis
-and reporting within each file's documented benchmark scope.
+Instrumentation and process scheduling can change status and runtime across
+runs. Treat each row as one observation rather than combining its CPU value
+with a status or runtime from another campaign. The runs used normal
+experimental operation without an intentionally added external workload;
+`manifest.csv` defines the benchmark and configuration scope of each file.
 
-## Row schema
+## Row Schema
 
 The CSV files have no header row and use the following schema:
 
@@ -26,13 +26,9 @@ benchmark,status,runtime_seconds,cpu_usage_percent
 - `cpu_usage_percent` is the CPU-utilization value recorded by the measurement
   campaign.
 
-The runtime and status belong to the same instrumented observation as the CPU
-value. `manifest.csv` defines the exact scope used when analyzing and reporting
-each run.
+## Inventory and Validation
 
-## Inventory and validation
-
-`manifest.csv` records the exact file path, benchmark-list size, row count,
+`manifest.csv` records the file path, benchmark-list size, row count,
 status distribution, and SHA-256 identity for every run. The public evidence
 validator checks that:
 

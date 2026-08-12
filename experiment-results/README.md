@@ -1,19 +1,20 @@
 # Experiment Results
 
-This directory stores recorded results for AriParti-Distributed experiments.
-Each result family documents the configuration metadata available for that
-evidence.
+This directory archives the per-instance records and derived summaries used by
+the AriParti-Distributed evaluation. Start with:
 
-Start with `metadata.json` for the archive-wide aggregation rule and a precise
-inventory of which legacy configuration fields are known or unavailable. Run
-the comprehensive current-snapshot validator from the repository root with:
+- `manifest.csv` for the result-directory and record inventory;
+- `metadata.json` for aggregation rules and campaign metadata; and
+- the family-specific README beside a result set for its scope and schema.
+
+Validate the archive from the repository root with:
 
 ```bash
 python3 test/validate_evidence.py
 ```
 
-The validator is read-only and does not consult Git history, start MPI, invoke a
-solver, or require a local SMT-LIB benchmark checkout.
+The command reads the archived files and requires no benchmark checkout, MPI
+job, or solver run.
 
 ## Layout
 
@@ -35,7 +36,7 @@ experiment-results/
     └── *-results-sumup.txt
 ```
 
-Current file counts:
+Archived file counts:
 
 | Area | Files |
 | --- | ---: |
@@ -46,23 +47,11 @@ Current file counts:
 | `parallel/**/*-sumup.txt` | 61 |
 | `ablation/full-list-p8-1200s/*.csv` | 7 |
 
-`manifest.csv` records the current result directories, CSV file counts, and
-per-CSV record counts where the count is uniform for that directory.
-`distributed/cpu-usage/manifest.csv` gives the exact per-file inventory for the
-seven CPU-instrumented runs: 79,387 records in total, with status counts and
-SHA-256 values for every CSV.
-
-`metadata.json` separates recorded facts from unavailable legacy details. In
-particular, the legacy parallel/distributed files identify solver versions and
-slot configurations through their campaign labels, but do not retain a complete
-machine inventory, evaluated Git revision, binary hashes, or random-seed
-metadata. These fields are marked unavailable rather than reconstructed.
-
-The mechanism-comparison archive is in `ablation/full-list-p8-1200s/`. It
-contains eight aggregate comparisons and a complete eight-row manuscript
-table, together with machine-readable result metadata, source provenance, and
-checksums. It is the aggregate-level evidence bundle for the mechanism-ablation
-study.
+`distributed/cpu-usage/manifest.csv` inventories the seven instrumented runs:
+79,387 records in total, with status counts and SHA-256 values for every CSV.
+The mechanism-comparison bundle under `ablation/full-list-p8-1200s/` contains
+eight aggregate comparisons, the corresponding manuscript table, metadata,
+source identities, and checksums.
 
 ## Data Format
 
@@ -73,23 +62,20 @@ no header row. The observed columns are:
 benchmark,status,runtime_seconds
 ```
 
-The CPU-usage CSV files under `distributed/cpu-usage/` are valid observations
-from dedicated CPU-instrumented solver runs. They have no header row, and the
-columns are:
+The CPU-usage CSV files under `distributed/cpu-usage/` come from dedicated
+instrumented solver runs. They have no header row, and the columns are:
 
 ```text
 benchmark,status,runtime_seconds,cpu_usage_percent
 ```
 
-CPU measurement requires instrumentation and can produce normal run-to-run
-variation in solver scheduling, status, and runtime. The CPU value and its
-accompanying status and runtime form one self-contained observation and are the
-authoritative records for this campaign. The runs used normal experimental
-operation without intentionally added external workload. The records are
-suitable for direct CPU-utilization analysis and reporting within the file and
-benchmark scope recorded in `distributed/cpu-usage/manifest.csv`. See
-`distributed/cpu-usage/README.md` for the complete interpretation and public
-validation procedure.
+Each CPU value belongs to the status and runtime in the same row. Instrumented
+runs may differ from uninstrumented runs because of normal scheduling and
+runtime variation; analyze them within the file and benchmark scope recorded in
+`distributed/cpu-usage/manifest.csv`. See `distributed/cpu-usage/README.md` for
+measurement details.
+
+## Aggregation Rules
 
 The summary files under `distributed/sumup/` and the top-level
 `parallel/*-results-sumup.txt` files are human-readable tables with the columns:
@@ -111,17 +97,14 @@ Non-decisive runs are assigned 2,400 seconds, and the total is rounded to the
 nearest whole second only after summation. The per-instance CSV files define
 those PAR-2 values.
 
-The 1,200-second value is the nominal leader-side cutoff. The leader checks the
-cutoff between communication cycles, so collection and cutoff-enforcement
-latency can make a recorded completion time exceed 1,200 seconds. Aggregation
-uses the recorded status as authoritative: `sat` and `unsat` remain decisive
-and retain their recorded runtime. The current archive contains exactly two
-such decisive records above 1,200 seconds; `metadata.json` records the count and
-`test/validate_evidence.py` verifies it. This rule preserves the current
-per-instance baseline instead of silently relabeling records.
+The leader checks the 1,200-second timeout between communication cycles, so a
+recorded completion can exceed the cutoff by the collection and enforcement
+latency. Aggregation retains the recorded status and runtime: `sat` and `unsat`
+remain decisive. The archive contains two decisive records above 1,200
+seconds; `metadata.json` records them and `test/validate_evidence.py` checks the
+count.
 
-Check all per-run and aggregate summary files against the current per-instance
-CSVs with:
+Check all per-run and aggregate summaries against the per-instance CSVs with:
 
 ```bash
 python3 experiment-results/sync_sumups.py --check
@@ -130,12 +113,13 @@ python3 experiment-results/sync_sumups.py --check
 To regenerate any stale summary files with the same documented rule, use
 `--write` instead of `--check`.
 
+## Derived Tables
+
 `parallel/pure-conjunction-p16-summary.csv` is a derived summary. It records
 per-theory QF_LRA, QF_LIA, QF_NRA, and QF_NIA rows together with retained
-linear and nonlinear aggregate rows. The current outcome table independently
-recovers the per-theory counts by joining each filtered list with the
-corresponding p16 per-configuration CSVs. The
-recorded semantics treat only `sat` and `unsat` as decisive. The
+linear and nonlinear aggregate rows. Per-theory counts come from joining each
+filtered benchmark list with its p16 per-configuration CSVs. Only `sat` and
+`unsat` are decisive. The
 `ariparti_faster` and `cvc5_faster` fields compare runtimes only when both
 configurations are decisive; `equal_runtime` records exact ties.
 `neither_solved` records the remaining non-decisive pairs.
@@ -151,25 +135,19 @@ eight Full-versus-Disabled comparisons. `table.tex` renders all eight
 theory--mechanism comparisons. See its README and `result-metadata.json` for
 the scope, result meaning, and validation command.
 
-## Evidence Scope
+## Archive Scope
 
-- The CPU-utilization campaign contains 79,387 validated observations from
-  seven dedicated instrumented runs. Each file is directly usable within the
-  exact scope recorded in `distributed/cpu-usage/manifest.csv`.
-- The current complete-configuration performance tables use the QF_LRA,
-  QF_LIA, QF_NRA, and QF_NIA parallel and distributed data, including the
-  QF_NRA 32--512-slot scaling sweep.
-- `sat` and `unsat` are the decisive result labels. All other recorded labels
-  contribute to the unresolved count and receive the PAR-2 penalty specified
-  above.
-- The evaluation protocol uses a 1,200-second cutoff. The full-list mechanism
-  bundle records this value in its machine-readable metadata and validates it
-  against each aggregate row.
-- The source campaigns for the full-list bundle cover all four artifact lists,
-  p8, a 1,200-second timeout, and one recorded result per benchmark instance
-  and configuration. The bundle provides validated aggregate,
-  status-distribution, audit, provenance, and checksum artifacts for both
-  mechanism comparisons on every theory.
+- The parallel and distributed archive covers QF_LRA, QF_LIA, QF_NRA, and
+  QF_NIA; distributed data include the QF_NRA 32--512-slot sweep.
+- CPU-utilization results are 79,387 observations from seven instrumented runs.
+  Their manifest defines each file's benchmark and configuration scope.
+- The mechanism bundle covers all four artifact lists at p8 with a 1,200-second
+  timeout. Its source campaigns recorded one run per benchmark and
+  configuration; the published bundle contains aggregate and audit artifacts,
+  not the per-instance campaign logs.
+- Legacy campaign labels preserve solver versions and slot counts. Machine
+  inventory, evaluated Git revision, binary hashes, and random seeds were not
+  retained; `metadata.json` marks these fields unavailable.
 
 ## What the Validator Checks
 
