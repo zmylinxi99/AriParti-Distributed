@@ -23,9 +23,19 @@ ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK_ROOT = ROOT / "benchmark-lists"
 RESULT_ROOT = ROOT / "experiment-results"
 CPU_USAGE_ROOT = RESULT_ROOT / "distributed" / "cpu-usage"
+CPU_MONITOR_ROOT = CPU_USAGE_ROOT / "collection"
 DECISIVE = {"sat", "unsat"}
 ALLOWED_STATUSES = DECISIVE | {"failed"}
 PAR2_PENALTY_SECONDS = Decimal("2400")
+CPU_USAGE_REPORTED_MEANS = {
+    ("QF_LIA", "AriParti-s4-p128"): Decimal("81.44"),
+    ("QF_LIA", "SMTS-s4-p128"): Decimal("78.66"),
+    ("QF_LRA", "AriParti-s4-p128"): Decimal("81.63"),
+    ("QF_LRA", "SMTS-s4-p128"): Decimal("46.74"),
+    ("QF_NIA", "AriParti-s4-p128"): Decimal("98.40"),
+    ("QF_NRA", "AriParti-s4-p128"): Decimal("97.22"),
+    ("QF_NRA", "cvc5-1.0.8-parti512"): Decimal("8.87"),
+}
 
 
 class EvidenceError(RuntimeError):
@@ -115,6 +125,8 @@ def validate_cpu_usage(full_lists: dict[str, set[str]]) -> tuple[int, int]:
         )
         records: set[str] = set()
         counts: Counter[str] = Counter()
+        runtime_sum = Decimal(0)
+        weighted_cpu_sum = Decimal(0)
         with path.open(newline="", encoding="utf-8") as handle:
             for line_number, values in enumerate(csv.reader(handle), 1):
                 require(len(values) == 4, f"expected 4 CPU-usage CSV columns: {relative(path)}:{line_number}")
@@ -141,11 +153,13 @@ def validate_cpu_usage(full_lists: dict[str, set[str]]) -> tuple[int, int]:
                     f"invalid CPU-usage runtime: {relative(path)}:{line_number}",
                 )
                 require(
-                    cpu_usage.is_finite() and cpu_usage >= 0,
+                    cpu_usage.is_finite() and Decimal(0) <= cpu_usage <= Decimal(100),
                     f"invalid CPU-usage value: {relative(path)}:{line_number}",
                 )
                 records.add(benchmark)
                 counts[status] += 1
+                runtime_sum += runtime
+                weighted_cpu_sum += runtime * cpu_usage
 
         require(len(records) == int(row["records"]), f"CPU-usage record count mismatch: {relative(path)}")
         for status in ("sat", "unsat", "failed"):
@@ -154,11 +168,44 @@ def validate_cpu_usage(full_lists: dict[str, set[str]]) -> tuple[int, int]:
                 f"CPU-usage {status} count mismatch: {relative(path)}",
             )
         require(sha256_file(path) == row["sha256"], f"CPU-usage SHA-256 mismatch: {relative(path)}")
+        reported_mean = CPU_USAGE_REPORTED_MEANS[(logic, row["configuration"])]
+        actual_mean = (weighted_cpu_sum / runtime_sum).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        require(actual_mean == reported_mean, f"CPU-usage weighted-mean mismatch: {relative(path)}")
         record_count += len(records)
 
     actual_paths = set(CPU_USAGE_ROOT.glob("QF_*/*.csv"))
     require(actual_paths == listed_paths, "CPU-usage manifest file inventory mismatch")
     return len(rows), record_count
+
+
+def validate_cpu_monitor() -> int:
+    checksum_path = CPU_MONITOR_ROOT / "SHA256SUMS"
+    require(checksum_path.is_file(), "CPU-monitor checksum manifest is missing")
+    entries: dict[str, str] = {}
+    for line_number, line in enumerate(checksum_path.read_text(encoding="utf-8").splitlines(), 1):
+        fields = line.split(maxsplit=1)
+        require(len(fields) == 2, f"invalid CPU-monitor checksum entry: {relative(checksum_path)}:{line_number}")
+        digest, name = fields
+        require(re.fullmatch(r"[0-9a-f]{64}", digest) is not None, f"invalid CPU-monitor digest: {name}")
+        require(name not in entries, f"duplicate CPU-monitor checksum entry: {name}")
+        entries[name] = digest
+
+    expected_names = {
+        "monitor.py",
+        "workload_monitor_with_config.py",
+        "configs/s4-p128.json",
+    }
+    require(set(entries) == expected_names, "CPU-monitor checksum inventory mismatch")
+    for name, expected_digest in entries.items():
+        path = CPU_MONITOR_ROOT / name
+        require(path.is_file(), f"CPU-monitor file missing: {relative(path)}")
+        require(sha256_file(path) == expected_digest, f"CPU-monitor SHA-256 mismatch: {relative(path)}")
+
+    config_path = CPU_MONITOR_ROOT / "configs" / "s4-p128.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    require(len(config["worker_node_ips"]) == 4, "CPU-monitor configuration is not four-server")
+    require(config["worker_node_core"] == 128, "CPU-monitor configuration is not p128 per server")
+    return len(entries)
 
 
 def read_result_csv(path: Path, expected_benchmarks: set[str]) -> tuple[dict[str, tuple[str, Decimal]], dict[str, int]]:
@@ -396,6 +443,7 @@ def main() -> int:
         full_lists, benchmark_manifest_rows = validate_benchmark_manifest()
         result_manifest_rows = validate_result_manifest()
         cpu_usage_csvs, cpu_usage_records = validate_cpu_usage(full_lists)
+        cpu_monitor_files = validate_cpu_monitor()
         records, raw_csvs, raw_records, table_rows, post_cutoff = validate_raw_results(full_lists)
         validate_archive_metadata(post_cutoff)
         derived_rows = validate_derived_summary(
@@ -421,15 +469,16 @@ def main() -> int:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 
-    print("OK: current-snapshot evidence is internally consistent")
+    print("OK: archived evidence is internally consistent")
     print(f"  benchmark manifest rows: {benchmark_manifest_rows}")
     print(f"  result manifest rows: {result_manifest_rows}")
     print(f"  per-instance result CSVs/records: {raw_csvs}/{raw_records}")
     print(f"  CPU-usage CSVs/records: {cpu_usage_csvs}/{cpu_usage_records}")
+    print(f"  verified CPU-monitor files: {cpu_monitor_files}")
     print(f"  recomputed parallel/distributed table rows: {table_rows}")
     print(f"  recomputed pure-conjunction rows: {derived_rows}")
     print(f"  verified ablation checksum entries: {checksum_entries}")
-    print(f"  decisive records above nominal 1200-second cutoff: {post_cutoff} (documented archive behavior)")
+    print(f"  decisive records above nominal 1200-second cutoff: {post_cutoff}")
     return 0
 
 

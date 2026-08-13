@@ -6,44 +6,55 @@
       "sat",
       "unsat"
     ],
-    "unresolved_status_rule": "every other recorded status is unresolved",
+    "unresolved_status_rule": "every other status is unresolved",
     "nominal_timeout_seconds": 1200,
     "par2_penalty_seconds": 2400,
     "par2_rule": "sum full-precision decisive runtimes and 2400 seconds for every unresolved record; round the total to the nearest whole second using round-half-up",
-    "status_precedence": "the recorded status determines whether a run is decisive; a decisive runtime is retained as recorded even if collection or cutoff-enforcement latency makes it exceed 1200 seconds",
+    "status_precedence": "the result status determines whether a run is decisive; a decisive runtime is included even if collection or cutoff-enforcement latency makes it exceed 1200 seconds",
     "observed_decisive_records_above_nominal_timeout": 2
   },
-  "legacy_parallel_and_distributed_campaigns": {
+  "parallel_and_distributed_results": {
     "benchmark_identity": "benchmark-lists/manifest.csv and the files it names",
-    "backend_identity": "solver family and advertised version are encoded in result filenames; executable hashes are unavailable",
+    "backend_identity": "solver family and version are encoded in result filenames",
+    "hardware_environments": {
+      "earlier_parallel_campaign": "one Ubuntu 20.04.4 LTS server with 1 TB RAM and two AMD EPYC 7763 processors, each with 64 physical cores",
+      "distributed_hardware_campaign": "Ubuntu 20.04.4 LTS servers with 1 TB RAM and two AMD EPYC 9754 processors per server, each processor with 128 physical cores; p512 uses four servers with 128 configured CPU slots per server",
+      "full_list_p8_ablation_campaign": "one server in the distributed-hardware environment"
+    },
     "slot_label_semantics": {
       "parallel_pN": "N configured slots on one server",
       "distributed_sS_pP": "S servers with P configured slots per server",
-      "other_labels": "preserved campaign labels; consult the manuscript and result tables for the comparison scope"
+      "manuscript_pN": "the complete configured budget of N CPU slots for one configuration-instance run",
+      "ariparti_p512": "four servers with 128 configured slots each; 504 distributed-tier slots plus an eight-slot isolated allocation containing both the local partition-and-solve branch and the direct complete-instance solver; leader and partitioners share these allocations",
+      "other_labels": "consult the manuscript and result tables for the comparison scope"
     },
-    "evaluated_ariparti_git_revision": "unavailable: the legacy per-instance archive did not record a Git revision",
-    "evaluated_launcher_sha256": "unavailable: the legacy per-instance archive did not record a launcher hash",
-    "evaluated_partitioner_sha256": "unavailable: the legacy per-instance archive did not record a partitioner hash",
-    "evaluated_random_seeds": "unavailable: the legacy per-instance archive did not record seed metadata",
-    "machine_details": "unavailable: the retained archive does not contain a complete historical machine inventory",
+    "ariparti_p512_maximum_live_processes": 519,
+    "cpu_binding": "no fixed per-process CPU affinity; slot reservations and worker ceilings define the configured budget",
     "run_repetitions": 1,
-    "timeout_semantics": "nominal leader-side wall-clock cutoff after MPI job startup; the leader checks the cutoff between communication cycles, so recorded completion can exceed the nominal value"
+    "timeout_semantics": "the 1200-second application cutoff includes AriParti initialization, partitioning, backend startup, and solving after MPI job startup; the leader checks the cutoff between communication cycles, so completion can exceed the nominal value",
+    "campaign_relationship": "the main parallel, full-list ablation, and distributed-hardware results are distinct campaigns; earlier parallel p8 and p32 rows are not scaling baselines for distributed p512 rows",
+    "resource_sweep_scope": "same-campaign full-list QF_NRA results at p32, p64, p128, p256, and p512",
+    "distributed_reference_scope": "SMTS on QF_LRA and QF_LIA and cvc5-cloud on QF_NRA at p512; the AriParti QF_NIA p512 result has no evaluated distributed reference"
   },
-  "cpu_usage_campaign": {
+  "cpu_usage": {
     "directory": "distributed/cpu-usage",
     "inventory": "distributed/cpu-usage/manifest.csv",
     "evidence_status": "valid per-instance CPU-utilization measurements",
-    "campaign_relation": "dedicated CPU-instrumented solver runs whose CPU value, status, and runtime form a self-contained observation",
-    "measurement_effect": "CPU instrumentation can produce normal run-to-run variation in solver scheduling, status, and runtime",
-    "experimental_operation": "runs used normal experimental operation without intentionally added external workload",
+    "row_semantics": "each row contains the CPU value, status, and runtime from one instrumented solver run",
+    "collector": "distributed/cpu-usage/collection",
+    "collector_topology": "one unbound MPI monitor rank per server; four per-server temporal means are averaged with equal server weight",
+    "sampling": "psutil.cpu_percent(interval=0.02, percpu=true) followed by a 0.08-second sleep; nominal 0.1-second cycle plus overhead",
+    "normalization": "mean over all logical-CPU percentages visible on a host, multiplied by 512/128 and capped at 100 percent",
+    "measurement_scope": "host-wide CPU activity normalized to the configured 128-slot allocation on each of four servers and averaged with equal server weight",
     "intended_use": "direct CPU-utilization analysis and reporting",
-    "record_interpretation": "use each CSV within the exact benchmark and row scope recorded in distributed/cpu-usage/manifest.csv"
+    "data_scope": "each CSV uses the benchmark and row scope defined in distributed/cpu-usage/manifest.csv",
+    "reported_interpretation": "end-to-end utilization of each complete configuration"
   },
-  "full_list_ablation_campaign": {
+  "full_list_ablation": {
     "metadata": "ablation/full-list-p8-1200s/result-metadata.json",
     "source_provenance": "ablation/full-list-p8-1200s/source-provenance.json",
     "integrity_manifest": "ablation/full-list-p8-1200s/SHA256SUMS",
-    "public_evidence_level": "validated aggregate and audit artifacts; per-instance campaign logs are not included"
+    "public_evidence_level": "validated aggregate tables, paired deltas, provenance records, and integrity checks"
   },
   "new_run_metadata": {
     "output": "<output_dir>/run-metadata.json",

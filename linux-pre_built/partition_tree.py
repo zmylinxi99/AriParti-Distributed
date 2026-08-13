@@ -160,7 +160,6 @@ class ParallelTree(PartitionTree):
     def __init__(self, start_time):
         self.solvings = []
         self.waitings = deque()
-        # self.endeds = []
         self.pid2node = {}
         
         self.total_solve_time = 0.0
@@ -184,12 +183,6 @@ class ParallelTree(PartitionTree):
                 self.average_solve_time = self.total_solve_time / solved_number
                 logging.debug(f'solve time: {solve_time}')
                 logging.debug(f'solved_number: {solved_number}, average_solve_time: {self.average_solve_time}')
-            # elif reason == NodeReason.split:
-            #     self.sync_to_partitioner(node)
-            # else:
-            #     pass
-        # elif status.is_terminated():
-        #     self.sync_to_partitioner(node)
     
     # pid: id in partitioner
     # ppid: parent id in partitioner
@@ -204,7 +197,6 @@ class ParallelTree(PartitionTree):
         self.pid2node[pid] = node
         if id == 0:
             self.root = node
-        # logging.debug(f'parallel tree make node: {node}')
         return node
     
     def get_next_waiting_node(self):
@@ -217,31 +209,18 @@ class ParallelTree(PartitionTree):
     def get_solving_number(self):
         return len(self.solvings)
     
-    # def get_ended_number(self):
-    #     return len(self.endeds)
-    
     def get_node_number(self):
         return len(self.nodes)
-    
-    # def get_unended_number(self):
-    #     return len(self.nodes) - len(self.endeds)
     
     # precond: node is solving
     # terminate: unsolved or solving
     def terminate_node(self, node: ParallelNode, reason: NodeReason):
-        # if node.status.is_ended():
-        #     return
         self.update_node_status(node, 
                     NodeStatus.terminated, 
                     reason)
         if node.assign_to != None:
             node.assign_to.terminate()
             node.assign_to = None
-    
-    # def terminate_split_path(self, node: ParallelNode):
-    #     self.terminate_node(node, NodeReason.split)
-    #     if node.parent != None:
-    #         self.terminate_split_path(node.parent)
     
     def set_node_split(self, node: ParallelNode, assigned_coord: int):
         node.assigned_coord = assigned_coord
@@ -360,7 +339,6 @@ class ParallelTree(PartitionTree):
             node: ParallelNode,
             status: NodeStatus,
             reason: NodeReason = NodeReason.itself):
-        # logging.debug(f'node-{node.id} is solved: {status} by {reason} in {self.get_node_solving_time(node)}s')
         if status.is_sat():
             self.node_solved_sat(node, reason)
         elif status.is_unsat():
@@ -376,24 +354,12 @@ class ParallelTree(PartitionTree):
                            self.get_current_time())
         self.solvings.append(node)
         
-    # def log_display_dfs(self, node: ParallelNode, depth: int):
-    #     logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
-    #     for child in node.children:
-    #         self.log_display_dfs(child, depth + 1)
-    
-    # def log_display(self):
-    #     logging.debug(f'display parallel tree')
-    #     if self.root != None:
-    #         self.log_display_dfs(self.root, 0)
-    
     def log_display(self):
         logging.debug(f'display parallel tree')
         stack = deque()
         if self.root is not None:
             stack.append((self.root, 0))
         while len(stack) > 0:
-            # bfs, dfs
-            # node, depth = stack.popleft()
             node, depth = stack.pop()
             logging.debug(f'{" " * (2 * depth)}({node.id}, {node.status})')
             for child in node.children:
@@ -476,20 +442,12 @@ class DistributedTree(PartitionTree):
         ret.assign_to = coord_id
         return ret
     
-    # def log_display_dfs(self, node: DistributedNode, depth: int):
-    #     logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
-    #     for child in node.children:
-    #         self.log_display_dfs(child, depth + 1)
-    
     def log_display(self):
         logging.debug(f'display distributed tree')
-        # self.log_display_dfs(self.root, 0)
         stack = deque()
         if self.root is not None:
             stack.append((self.root, 0))
         while len(stack) > 0:
-            # bfs, dfs
-            # node, depth = stack.popleft()
             node, depth = stack.pop()
             logging.debug(f'{" " * (2 * depth)}({node.id}, {node.partial_status}, {node.status})')
             for child in node.children:

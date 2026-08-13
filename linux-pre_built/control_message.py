@@ -32,11 +32,6 @@ class ControlMessage:
         def is_terminate_coordinator(self):
             return self == ControlMessage.L2C.terminate_coordinator
     
-        # # solve leader-0
-        # initiate_leader_0 = auto()
-        # def is_initiate_leader_0(self):
-        #     return self == ControlMessage.L2C.initiate_leader_0
-    
     # Coordinator To Leader
     class C2L(Enum):
         # split node to coordinator [src]
@@ -45,10 +40,8 @@ class ControlMessage:
         split_failed = auto()
         # coordinator [src] solved the assigned node
         notify_result = auto()
-        # pre-partiitoning done
+        # pre-partitioning done
         pre_partition_done = auto()
-        # # pre-processing done
-        # pre_process_done = auto()
         
         notify_error = auto()
         
@@ -64,9 +57,6 @@ class ControlMessage:
         def is_pre_partition_done(self):
             return self == ControlMessage.C2L.pre_partition_done
         
-        # def is_pre_process_done(self):
-        #     return self == ControlMessage.C2L.pre_process_done
-    
         def is_notify_error(self):
             return self == ControlMessage.C2L.notify_error
     
@@ -121,5 +111,3 @@ class ControlMessage:
         
         def is_solved_result(self):
             return self.is_sat() or self.is_unsat() or self.is_unknown()
-    
-        

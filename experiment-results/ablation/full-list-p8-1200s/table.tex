@@ -1,24 +1,25 @@
 % Rendered from the complete validated full-list ablation archive.
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
-\caption{Full-list p8 mechanism ablation results at 1200~s across the four evaluated theories. Here $\Delta$solved is Full minus Disabled and $\Delta\Sigma$PAR-2 is Disabled minus Full, so positive values favor Full; PAR-2 columns are aggregate sums in seconds.}
+\caption{Full-list p8 mechanism ablations at 1200~s on all four arithmetic theories.
+Here $\Delta$solved is Enabled minus Disabled and $\Delta\Sigma$PAR-2 is Disabled minus Enabled, so positive values favor the enabled mechanism; PAR-2 columns are aggregate sums in seconds.}
 \label{tab:ablation-full-list}
 \footnotesize
 \setlength{\tabcolsep}{1.8pt}
 \begin{tabular}{@{}llrrrrrr@{}}
 \toprule
-Theory & Mechanism & \shortstack{Full\\solved} & \shortstack{Disabled\\solved} & $\Delta$ solved & \shortstack{Full\\$\Sigma$PAR-2} & \shortstack{Disabled\\$\Sigma$PAR-2} & \shortstack{$\Delta$\\$\Sigma$PAR-2} \\
+Theory & Mechanism & \shortstack{Enabled\\solved} & \shortstack{Disabled\\solved} & $\Delta$ solved & \shortstack{Enabled\\$\Sigma$PAR-2} & \shortstack{Disabled\\$\Sigma$PAR-2} & \shortstack{$\Delta$\\$\Sigma$PAR-2} \\
 \midrule
-QF\_LRA & BICP & 1,723 & 1,720 & 3 & 98,686 & 109,876 & 11,190 \\
+QF\_LRA & BCP--ICP coupling & 1,723 & 1,720 & 3 & 98,686 & 109,876 & 11,190 \\
 QF\_LRA & Clause reduction & 1,723 & 1,722 & 1 & 98,686 & 100,619 & 1,933 \\
 \midrule
-QF\_LIA & BICP & 12,881 & 12,483 & 398 & 1,432,372 & 2,542,383 & 1,110,011 \\
+QF\_LIA & BCP--ICP coupling & 12,881 & 12,483 & 398 & 1,432,372 & 2,542,383 & 1,110,011 \\
 QF\_LIA & Clause reduction & 12,881 & 12,554 & 327 & 1,432,372 & 2,338,220 & 905,848 \\
 \midrule
-QF\_NIA & BICP & 20,787 & 20,382 & 405 & 11,544,246 & 12,690,780 & 1,146,534 \\
+QF\_NIA & BCP--ICP coupling & 20,787 & 20,382 & 405 & 11,544,246 & 12,690,780 & 1,146,534 \\
 QF\_NIA & Clause reduction & 20,787 & 20,520 & 267 & 11,544,246 & 12,320,757 & 776,511 \\
 \midrule
-QF\_NRA & BICP & 11,541 & 11,448 & 93 & 1,496,897 & 1,724,833 & 227,936 \\
+QF\_NRA & BCP--ICP coupling & 11,541 & 11,448 & 93 & 1,496,897 & 1,724,833 & 227,936 \\
 QF\_NRA & Clause reduction & 11,541 & 11,533 & 8 & 1,496,897 & 1,513,858 & 16,961 \\
 \bottomrule
 \end{tabular}

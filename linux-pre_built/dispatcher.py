@@ -7,7 +7,6 @@ if __name__ == '__main__':
     os.sched_setaffinity(0, set(range(os.cpu_count())))
     rank = MPI.COMM_WORLD.Get_rank()
     leader_rank = MPI.COMM_WORLD.Get_size() - 1
-    # print(f'rank: {rank}')
     if rank < leader_rank:
         ap_coordinator = Coordinator()
         ap_coordinator()

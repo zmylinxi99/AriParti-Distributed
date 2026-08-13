@@ -12,9 +12,9 @@ This directory contains runnable examples and read-only consistency checks.
   trees.
 - `test_prebuilt_package.py`: redistributed binaries, checksums, licenses,
   source/prebuilt script identity, and delegated-node state.
-- `validate_evidence.py`: benchmark and result inventories, CPU records, and
-  all reader-facing parallel, distributed, pure-conjunction, and mechanism
-  summaries.
+- `validate_evidence.py`: benchmark and result inventories, CPU records and
+  collector identity, and all reader-facing parallel, distributed,
+  pure-conjunction, and mechanism summaries.
 
 Run all read-only checks from the repository root with:
 

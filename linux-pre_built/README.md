@@ -2,8 +2,9 @@
 
 This directory packages the AriParti launcher, partitioner, and backend solvers
 for Linux x86-64. It requires Python 3.8 or later, Open MPI, `python3-mpi4py`,
-and GLIBC 2.30 or later. The launcher uses Linux-specific CPU affinity and Open
-MPI options.
+and GLIBC 2.30 or later. The launcher uses Linux-specific affinity controls and
+Open MPI with process binding disabled; configured CPU slots are scheduling
+budgets rather than fixed one-process-per-core bindings.
 
 ## Contents
 
@@ -12,7 +13,7 @@ MPI options.
 - The AriParti partitioner executable is stored under `binaries/`.
 - Unmodified Linux x86-64 backend SMT solver executables are redistributed for
   the versions used in the evaluation. Their provenance, licenses, and SHA-256
-  values are recorded in `../THIRD_PARTY_NOTICES.md` and
+  values are listed in `../THIRD_PARTY_NOTICES.md` and
   `../third-party-licenses/`.
 
 Current binaries:

@@ -3,7 +3,7 @@
   "public_evidence_availability": {
     "bundle_level": "validated aggregate and audit artifacts",
     "scope": "complete results and validation evidence for all eight reported Full-versus-Disabled comparisons",
-    "evaluated_launcher_and_partitioner_files": "included at the repository paths recorded under evaluated_implementation_identity"
+    "evaluated_launcher_and_partitioner_files": "included at the repository paths named under evaluated_implementation_identity"
   },
   "evaluated_implementation_identity": {
     "launcher": {
@@ -32,7 +32,7 @@
       "QF_NIA": 25358,
       "QF_NRA": 12134
     },
-    "cores_per_instance": 8,
+    "configured_cpu_slots_per_instance": 8,
     "runs_per_benchmark_instance_and_configuration": 1,
     "timeout_seconds": 1200,
     "variants": [

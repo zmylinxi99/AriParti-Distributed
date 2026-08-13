@@ -90,11 +90,9 @@ class Leader:
         logging.debug(f'temp_folder_path: {self.temp_folder_path}')
         
         self.idle_coordinators = deque()
-        # dist coords and isolated coord
         self.coordinators = [CoordinatorInfo(i, self.start_time) for i in range(self.num_dist_coords + 1)]
         # Round-robin split selection keeps migration decisions deterministic.
         self.next_split_rank = 0
-        # logging.debug(f'init done!')
         
         if self.get_model_flag:
             self.model = None
@@ -147,7 +145,6 @@ class Leader:
     
     def init_logging(self):
         log_dir_path = f'{self.output_folder_path}/logs'
-        # os.makedirs(log_dir_path, exist_ok=True)
         logging.basicConfig(format='%(relativeCreated)d - %(levelname)s - %(message)s', 
                 filename=f'{log_dir_path}/leader.log', level=logging.DEBUG)
         current_time = datetime.now()
@@ -197,7 +194,6 @@ class Leader:
             node = self.coordinators[src].assigned
             logging.info(f'solved: node-{node.id} is {result}')
             self.tree.node_partial_solved(node, result)
-            # self.tree.log_display()
             if self.is_done():
                 return True
             self.set_coordinator_idle(src)
@@ -244,12 +240,9 @@ class Leader:
                 msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=self.isolated_rank, tag=1)
                 logging.debug(f'receive {msg_type} message from coordinator-isolated')
                 if msg_type.is_notify_result():
-                    # coordinator {src} solved the assigned task
                     if self.process_notified_result(self.isolated_rank):
-                        logging.debug(f'init_coord_isolated solved')
+                        logging.debug('isolated coordinator returned a decisive result')
                         return True
-                # elif msg_type.is_pre_process_done():
-                #     return False
                 elif msg_type.is_notify_error():
                     raise CoordinatorErrorMessage()
                 else:
@@ -281,7 +274,6 @@ class Leader:
             msg_type: ControlMessage.C2L = MPI.COMM_WORLD.recv(source=src_coord, tag=1)
             logging.debug(f'receive {msg_type} message from coordinator-isolated')
             if msg_type.is_notify_result():
-                # coordinator {src} solved the assigned task
                 if self.process_notified_result(src_coord):
                     return True
             elif msg_type.is_pre_partition_done():
@@ -338,7 +330,6 @@ class Leader:
         if split_coord == None:
             self.idle_coordinators.append(idle_coord)
             return
-        # logging.info(f'assign node from coordinator-{split_coord} to coordinator-{idle_coord}')
         self.coordinators[split_coord].status = CoordinatorStatus.splitting
         self.send_split_message(split_coord, idle_coord)
     
@@ -365,14 +356,12 @@ class Leader:
     def solve(self):
         if self.init_coord_isolated():
             return
-        # communicate with coordinators
         while True:
             if self.check_coordinators():
                 return
             self.assign_node_to_idle_coordinator()
             if self.time_limit != 0 and self.get_current_time() >= self.time_limit:
                 raise TimeoutError()
-            # time.sleep(0.01)
     
     def terminate_coordinators(self):
         for i in range(self.num_dist_coords):
@@ -390,10 +379,6 @@ class Leader:
         except TimeoutError:
             result = 'timeout'
             self.tree.log_display()
-        # except AssertionError as ae:
-        #     result = 'AssertionError'
-        #     # print(f'AssertionError: {ae}')
-        #     # logging.info(f'AssertionError: {ae}')
         except CoordinatorErrorMessage:
             result = 'Coordinator-Error'
             self.tree.log_display()
@@ -401,7 +386,6 @@ class Leader:
             result = 'Leader-Error'
             logging.error(f'Leader Error: {e}')
             logging.error(f'{traceback.format_exc()}')
-            # MPI.COMM_WORLD.Abort()
         else:
             status: NodeStatus = self.get_result()
             if status.is_sat():
@@ -418,7 +402,6 @@ class Leader:
         print(result)
         if self.get_model_flag and result == 'sat':
             assert(self.model is not None)
-            # print('model: ')
             print(self.model)
         print(execution_time)
         logging.info(f'result: {result}, time: {execution_time}')
@@ -429,4 +412,3 @@ class Leader:
         
         self.clean_up()
         MPI.COMM_WORLD.Barrier()
-        # MPI.COMM_WORLD.Abort()

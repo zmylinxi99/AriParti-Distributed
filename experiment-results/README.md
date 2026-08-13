@@ -4,7 +4,7 @@ This directory archives the per-instance records and derived summaries used by
 the AriParti-Distributed evaluation. Start with:
 
 - `manifest.csv` for the result-directory and record inventory;
-- `metadata.json` for aggregation rules and campaign metadata; and
+- `metadata.json` for aggregation rules and evaluation settings; and
 - the family-specific README beside a result set for its scope and schema.
 
 Validate the archive from the repository root with:
@@ -25,7 +25,7 @@ experiment-results/
 ├── sync_sumups.py # Narrow checker/regenerator for text summaries
 ├── distributed/
 │   ├── data/       # Per-instance distributed results in CSV format
-│   ├── cpu-usage/  # Validated, CPU-instrumented per-instance runs
+│   ├── cpu-usage/  # Instrumented runs and collection tool
 │   └── sumup/      # Human-readable summary tables
 ├── ablation/
 │   └── full-list-p8-1200s/         # Checksum-validated ablation evidence bundle
@@ -69,11 +69,13 @@ instrumented solver runs. They have no header row, and the columns are:
 benchmark,status,runtime_seconds,cpu_usage_percent
 ```
 
-Each CPU value belongs to the status and runtime in the same row. Instrumented
-runs may differ from uninstrumented runs because of normal scheduling and
-runtime variation; analyze them within the file and benchmark scope recorded in
-`distributed/cpu-usage/manifest.csv`. See `distributed/cpu-usage/README.md` for
-measurement details.
+Each row is one matched CPU, status, and runtime observation from an
+instrumented run. Analyze the rows within the file and benchmark scope defined
+in `distributed/cpu-usage/manifest.csv`. See `distributed/cpu-usage/README.md` for
+measurement details and `distributed/cpu-usage/collection/README.md` for the
+collector's sampling, normalization, and aggregation rules.
+`distributed/cpu-usage/summarize.py --check` recomputes the runtime-weighted
+means and pooled observation counts used in the manuscript and response.
 
 ## Aggregation Rules
 
@@ -98,10 +100,10 @@ nearest whole second only after summation. The per-instance CSV files define
 those PAR-2 values.
 
 The leader checks the 1,200-second timeout between communication cycles, so a
-recorded completion can exceed the cutoff by the collection and enforcement
-latency. Aggregation retains the recorded status and runtime: `sat` and `unsat`
-remain decisive. The archive contains two decisive records above 1,200
-seconds; `metadata.json` records them and `test/validate_evidence.py` checks the
+completion can exceed the cutoff by the collection and enforcement latency.
+Aggregation uses the resulting status and runtime: `sat` and `unsat` remain
+decisive. The archive contains two decisive results above 1,200 seconds;
+`metadata.json` states this count and `test/validate_evidence.py` checks the
 count.
 
 Check all per-run and aggregate summaries against the per-instance CSVs with:
@@ -125,7 +127,7 @@ configurations are decisive; `equal_runtime` records exact ties.
 `neither_solved` records the remaining non-decisive pairs.
 
 `parallel/pure-conjunction-opensmt2-p16-summary.csv` applies the same join and
-outcome semantics to the two linear theories supported by the recorded
+outcome semantics to the two linear theories supported by the
 OpenSMT2 comparison. It supports the OpenSMT2 linear panel and the corresponding
 aggregate counts in the manuscript.
 
@@ -140,14 +142,14 @@ the scope, result meaning, and validation command.
 - The parallel and distributed archive covers QF_LRA, QF_LIA, QF_NRA, and
   QF_NIA; distributed data include the QF_NRA 32--512-slot sweep.
 - CPU-utilization results are 79,387 observations from seven instrumented runs.
-  Their manifest defines each file's benchmark and configuration scope.
+  Their manifest defines each file's benchmark and configuration scope, and
+  the collector defines how each run-level percentage was sampled,
+  normalized, and averaged over four servers.
 - The mechanism bundle covers all four artifact lists at p8 with a 1,200-second
-  timeout. Its source campaigns recorded one run per benchmark and
-  configuration; the published bundle contains aggregate and audit artifacts,
-  not the per-instance campaign logs.
-- Legacy campaign labels preserve solver versions and slot counts. Machine
-  inventory, evaluated Git revision, binary hashes, and random seeds were not
-  retained; `metadata.json` marks these fields unavailable.
+  timeout and one run per benchmark and configuration. It contains the
+  aggregate tables, deltas, provenance data, and integrity checks.
+- `metadata.json` defines the benchmark, solver, slot-budget, timeout, CPU
+  measurement, and aggregation semantics used by the result archive.
 
 ## What the Validator Checks
 
@@ -159,6 +161,7 @@ The public checker verifies:
   result CSVs (916,851 records);
 - schema, status, runtime, CPU value, uniqueness, benchmark membership, status
   counts, and SHA-256 identity for seven CPU-instrumented CSVs (79,387 records);
+- SHA-256 identity and normalization constants for the CPU collector;
 - all 57 per-run parallel summaries and all 79 rows in the parallel/distributed
   aggregate tables using the documented PAR-2 rule;
 - all nine derived pure-conjunction comparison rows; and

@@ -1,6 +1,6 @@
 # Benchmark Lists
 
-This directory stores benchmark path lists used by the recorded experiments.
+This directory stores the benchmark path lists used in the evaluation.
 The paths are relative benchmark identifiers, not local filesystem paths.
 
 ## Lists

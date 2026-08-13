@@ -1,17 +1,17 @@
 # Full-List p8/1200-Second Mechanism-Ablation Evidence
 
-This directory contains the aggregate results and audit files for eight
-Full-versus-Disabled comparisons: BICP and clause reduction on each of four
-benchmark theories. `delta.csv` stores the comparisons, and `table.tex` renders
-the manuscript table. Per-instance campaign logs are not part of this bundle.
+This directory contains the aggregate results and validation files for eight
+Full-versus-Disabled comparisons: BCP–ICP coupling and contextual clause
+reduction on each of four benchmark theories. `delta.csv` stores the
+comparisons, and `table.tex` renders the manuscript table.
 
 ## Experimental Scope
 
 - benchmark lists: QF_LRA (1,753), QF_LIA (13,226), QF_NIA (25,358), and
   QF_NRA (12,134)
-- eight cores per benchmark instance
+- p8: eight configured CPU slots per benchmark instance
 - 1,200-second timeout
-- one recorded run per benchmark instance and configuration
+- one run per benchmark instance and configuration
 - backend solvers: OpenSMT2 2.5.2 for QF_LRA/QF_LIA, Z3 4.12.1 for QF_NIA,
   and cvc5 1.0.8 for QF_NRA
 
@@ -34,13 +34,13 @@ partition-path bounds remain present in both variants.
 
 | Theory | Disabled mechanism | Full solved | Disabled solved | Solved advantage | Full PAR-2 | Disabled PAR-2 | PAR-2 advantage |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| QF_LRA | BICP | 1,723 | 1,720 | 3 | 98,686 | 109,876 | 11,190 |
+| QF_LRA | BCP–ICP coupling | 1,723 | 1,720 | 3 | 98,686 | 109,876 | 11,190 |
 | QF_LRA | Clause reduction | 1,723 | 1,722 | 1 | 98,686 | 100,619 | 1,933 |
-| QF_LIA | BICP | 12,881 | 12,483 | 398 | 1,432,372 | 2,542,383 | 1,110,011 |
+| QF_LIA | BCP–ICP coupling | 12,881 | 12,483 | 398 | 1,432,372 | 2,542,383 | 1,110,011 |
 | QF_LIA | Clause reduction | 12,881 | 12,554 | 327 | 1,432,372 | 2,338,220 | 905,848 |
-| QF_NIA | BICP | 20,787 | 20,382 | 405 | 11,544,246 | 12,690,780 | 1,146,534 |
+| QF_NIA | BCP–ICP coupling | 20,787 | 20,382 | 405 | 11,544,246 | 12,690,780 | 1,146,534 |
 | QF_NIA | Clause reduction | 20,787 | 20,520 | 267 | 11,544,246 | 12,320,757 | 776,511 |
-| QF_NRA | BICP | 11,541 | 11,448 | 93 | 1,496,897 | 1,724,833 | 227,936 |
+| QF_NRA | BCP–ICP coupling | 11,541 | 11,448 | 93 | 1,496,897 | 1,724,833 | 227,936 |
 | QF_NRA | Clause reduction | 11,541 | 11,533 | 8 | 1,496,897 | 1,513,858 | 16,961 |
 
 `Solved advantage` is `Full solved - Disabled solved`. `PAR-2 advantage` is
@@ -54,9 +54,9 @@ aggregate sums in seconds over the corresponding complete benchmark list.
 - `table.tex`: all eight mechanism-ablation comparisons reported in the
   manuscript
 - `paired-solved-set.csv`: benchmark identities behind solved-set differences
-- `status-distribution.csv`: recorded status counts
+- `status-distribution.csv`: status counts
 - `metadata-audit.csv`, `config-audit.csv`, and `consistency-audit.csv`:
-  validation outputs for the campaign data
+  validation outputs for the ablation data
 - `result-metadata.json`: machine-readable result scope and semantics
 - `source-provenance.json`: SHA-256 identities of the public evidence files and
   the evaluated launcher and partitioner

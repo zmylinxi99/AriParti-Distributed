@@ -4,13 +4,15 @@ This directory contains 79,387 per-instance observations from seven
 CPU-instrumented solver runs. Each row pairs one CPU-utilization measurement
 with the status and runtime observed in the same run.
 
+The collector, four-server configuration, exact sampling and aggregation
+semantics, and collector checksums are available under
+[`collection/`](collection/README.md).
+
 ## How to Interpret the Measurements
 
-Instrumentation and process scheduling can change status and runtime across
-runs. Treat each row as one observation rather than combining its CPU value
-with a status or runtime from another campaign. The runs used normal
-experimental operation without an intentionally added external workload;
-`manifest.csv` defines the benchmark and configuration scope of each file.
+Each row is one matched CPU, status, and runtime observation from the same
+instrumented run. `manifest.csv` defines the benchmark and configuration scope
+of each file.
 
 ## Row Schema
 
@@ -21,10 +23,12 @@ benchmark,status,runtime_seconds,cpu_usage_percent
 ```
 
 - `benchmark` is the relative SMT-LIB benchmark identifier.
-- `status` is the recorded solver outcome: `sat`, `unsat`, or `failed`.
-- `runtime_seconds` is the runtime recorded by the CPU-instrumented run.
-- `cpu_usage_percent` is the CPU-utilization value recorded by the measurement
-  campaign.
+- `status` is the solver outcome: `sat`, `unsat`, or `failed`.
+- `runtime_seconds` is the runtime of the CPU-instrumented run.
+- `cpu_usage_percent` is the run-level CPU-utilization value. It is the
+  equal-server mean of per-server temporal means after host-wide samples are
+  normalized to each server's 128-slot allocation; see the collection
+  documentation for the exact formula.
 
 ## Inventory and Validation
 
@@ -34,14 +38,30 @@ validator checks that:
 
 - all seven inventoried files are present and no unlisted CPU CSV is present;
 - every row has four fields and a supported status;
-- runtimes and CPU-utilization values are finite and non-negative;
+- runtimes are finite and non-negative, and CPU-utilization values are finite
+  and within 0--100%;
 - benchmark identifiers are unique within a file and belong to the stated
   benchmark list;
 - row and status counts match the manifest; and
-- every file matches its recorded SHA-256 value.
+- every file matches the SHA-256 value in the manifest.
+
+The validator also checks the archived collector files against
+`collection/SHA256SUMS` and checks the four-server, 128-slot
+configuration used by the normalization.
 
 Run the validation from the repository root:
 
 ```bash
 python3 test/validate_evidence.py
 ```
+
+Recompute the seven per-run runtime-weighted means and the three pooled
+profiles directly from the archived CSVs with:
+
+```bash
+python3 experiment-results/distributed/cpu-usage/summarize.py --check
+```
+
+The command prints a machine-readable CSV summary. With `--check`, it also
+checks the two-decimal per-run means used in the manuscript and the pooled
+observation counts used in the response letter.

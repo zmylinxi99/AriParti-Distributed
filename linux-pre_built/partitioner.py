@@ -26,7 +26,6 @@ class PartitionerStatus(Enum):
     running = auto()
     process_done = auto()
     receive_done = auto()
-    # error = auto()
     
     def is_running(self):
         return self == PartitionerStatus.running
@@ -36,9 +35,6 @@ class PartitionerStatus(Enum):
     
     def is_receive_done(self):
         return self == PartitionerStatus.receive_done
-    
-    # def is_error(self):
-    #     return self == PartitionerStatus.error
     
 class Partitioner:
     def __init__(self, p: subprocess.Popen):
@@ -77,19 +73,18 @@ class Partitioner:
         else:
             raise ValueError(f"Unknown partitioner result: {result}")
     
-    # True for p finished
     def check_p_status(self):
         if not self.is_running():
             return
         rc = self.p.poll()
         if rc == None:
             return
-        logging.info(f'Partitioner is finished! return code: {rc}')
+        logging.info(f'Partitioner finished with return code {rc}')
         if rc != 0:
             out_data, err_data = self.p.communicate()
-            logging.error(f'Partitioner Crashed! return code: {rc}')
-            logging.error(f'output: {out_data}')
-            logging.error(f'error: {err_data}')
+            logging.error(f'Partitioner failed with return code {rc}')
+            logging.error(f'stdout: {out_data}')
+            logging.error(f'stderr: {err_data}')
         self.status = PartitionerStatus.process_done
         return
     
@@ -101,7 +96,6 @@ class Partitioner:
         ready, _, _ = select.select([self.p.stdout], [], [], 0.1)
         if ready:
             data = self.p.stdout.read()
-            # logging.debug(f'data {data}')
             if data == '' and not self.check_running():
                 self.status = PartitionerStatus.receive_done
                 return False

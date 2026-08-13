@@ -1,6 +1,6 @@
 # QF_NIA Benchmark Provenance
 
-The QF_NIA experiments in the associated manuscript use the recorded
+The QF_NIA experiments in the associated manuscript use the
 25,358-instance list in `all/QF_NIA-all_list-25358.txt`. This list was prepared
 from the SMT-LIB repository available when the experiments began, before the
 SMT-LIB 2023 collection was frozen and published on Zenodo.
@@ -29,7 +29,7 @@ Their complete path list is
 `QF_NIA-frozen-2023-missing-from-experiment.txt`. The difference reflects the
 repository snapshot used to prepare the experiments; it was not produced by
 filtering benchmarks after observing solver results. All QF_NIA results in the
-manuscript are reported over the recorded 25,358-instance experimental list,
+manuscript are reported over the 25,358-instance experimental list,
 not over the later 25,443-instance frozen collection.
 
 ## Integrity Information
