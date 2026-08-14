@@ -224,20 +224,29 @@ descriptive result; no distributed QF_NIA reference was evaluated. All
 cross-system claims concern complete configurations, including task generation,
 scheduling, communication, and backend solving.
 
-The manuscript's correctness result is protocol-level SAT/UNSAT status
-soundness for the implemented failure-free MPI orchestration. Its semantic
-trusted base comprises equisatisfiable preprocessing, the expression and task
-translations, BICP enclosure operations satisfying the stated contractor
-contract, and sound backend results. The proof separately establishes
-soundness of the implemented contextual-reduction rules. Its
-ownership-preservation argument derives initial-frontier coverage from the
-implemented binary-split cover, and a refinement proposition connects the
-leader and coordinator event loops to the ownership protocol.
-The communication model assumes reliable nonduplicating MPI communication and
-no process or network failure. Timeouts, `unknown`, abnormal exits, resource
-failures, and executions outside that model are unresolved and provide no SAT
-or UNSAT evidence. The result does not claim failure recovery or reconstruction
-of a model in the original input vocabulary.
+The manuscript's correctness result is SAT/UNSAT status soundness for the
+abstract protocol defined by a covered initial frontier and the stated runtime
+transitions. Its semantic component contracts require equisatisfiable
+preprocessing, footprint-preserving local transformation and transfer,
+coverage-preserving binary splits, and sound backend results. The proof
+establishes model preservation for contextual reductions satisfying the stated
+semantic conditions and derives global closure from a cover-and-ownership
+invariant. Proving that every behavior of the concrete Python/C++/MPI
+implementation refines the abstract transitions is outside the theorem's
+scope.
+
+The abstract protocol records ownership at the transfer commit point: failed
+or stale transfer and result events leave the open-obligation set unchanged.
+It does not model process or network failure, and the theorem does not claim
+failure recovery. Timeouts, `unknown`, abnormal exits, and other inconclusive
+executions provide no SAT or UNSAT evidence.
+
+The runtime supports SMT-LIB `(get-model)`: the request is propagated to
+generated subtasks, and the model returned with the first SAT result is
+forwarded to the leader for output. The manuscript theorem establishes only
+the soundness of the reported SAT status through the task-footprint contract;
+it does not certify the forwarded text as a reconstructed model over the
+original, pre-preprocessing vocabulary.
 
 The earlier CAV 2024 artifact evaluation package is archived separately on
 [Zenodo](https://doi.org/10.5281/zenodo.10947054).
