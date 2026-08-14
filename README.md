@@ -44,8 +44,8 @@ python3 test/test_prebuilt_package.py
 The first command validates the benchmark/result inventory, recomputes
 all 79 parallel and distributed summary rows from 916,851 per-instance records,
 validates 79,387 records from seven CPU-instrumented runs and the
-collector checksums, recomputes the nine pure-conjunction rows, and checks the
-full-list ablation bundle. See
+collector checksums, recomputes the nine rows for the filtered
+no-eligible-Boolean-atom comparisons, and checks the full-list ablation bundle. See
 [`experiment-results/README.md`](experiment-results/README.md) for
 the data schema and [`experiment-results/metadata.json`](experiment-results/metadata.json)
 for the evaluation configuration and aggregation rules.
@@ -54,7 +54,7 @@ for the evaluation configuration and aggregation rules.
 
 | Capability | What it provides |
 | --- | --- |
-| Dynamic variable-level partitioning | Fine-grained divide-and-conquer parallelism for arithmetic formulas with limited Boolean branching, including instances whose Boolean abstraction has no remaining split point after preprocessing. |
+| Dynamic variable-level partitioning | Fine-grained divide-and-conquer parallelism for arithmetic formulas with limited Boolean branching, including instances with no eligible Boolean partitioning atom after AriParti's preprocessing. |
 | BICP simplification | Combined Boolean and interval propagation on generated subtasks. |
 | Contextual clause reduction | Literal and clause simplification justified by the BICP-derived context. |
 | Two-tier scheduling | A leader balances work across servers; coordinators maintain local partition trees and schedule solver workers. |
@@ -165,7 +165,7 @@ result and the current worker treats it as a subprocess error.
 AriParti-Distributed/
 ├── src/                 # Python runtime and C++ partitioner source
 ├── linux-pre_built/     # Linux launcher, partitioner, and backend binaries
-├── benchmark-lists/     # Full and pure-conjunction benchmark manifests
+├── benchmark-lists/     # Full and filtered benchmark manifests
 ├── experiment-results/  # Parallel, distributed, CPU, and ablation records
 ├── test/                # Example formulas, configurations, and validators
 ├── third-party-licenses/
@@ -186,7 +186,7 @@ material. Paths are relative to this repository.
 | Question | Repository path and contents |
 | --- | --- |
 | Which benchmarks were evaluated? | `benchmark-lists/manifest.csv` and `benchmark-lists/all/` define the four arithmetic lists. [`benchmark-lists/QF_NIA-provenance.md`](benchmark-lists/QF_NIA-provenance.md) explains the 85-instance difference between the evaluated QF_NIA list and the later frozen SMT-LIB 2023 list. |
-| Where are the parallel results? | `experiment-results/parallel/` contains per-instance CSVs and summaries by theory, backend, and CPU-slot budget. Its two top-level pure-conjunction summary CSVs contain the derived p16 comparisons. |
+| Where are the parallel results? | `experiment-results/parallel/` contains per-instance CSVs and summaries by theory, backend, and CPU-slot budget. Its two top-level `pure-conjunction` summary CSVs retain their historical filenames but contain the derived p16 comparisons on instances with no eligible Boolean partitioning atom after AriParti's preprocessing. |
 | Where are the distributed results? | `experiment-results/distributed/` contains the p512 measurements for all four theories and the QF_NRA 32--512-slot sweep. |
 | Where are the CPU measurements? | `experiment-results/distributed/cpu-usage/` contains 79,387 observations from seven instrumented runs, plus the collector and its sampling, normalization, and aggregation rules. |
 | Where are the BCP–ICP-coupling and contextual clause-reduction comparisons? | `experiment-results/ablation/full-list-p8-1200s/` contains all eight full-versus-disabled aggregate comparisons, the manuscript table, metadata, and checksums. Positive solved-count and PAR-2 deltas favor the full configuration. |

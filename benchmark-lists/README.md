@@ -14,7 +14,9 @@ The paths are relative benchmark identifiers, not local filesystem paths.
 | QF_NIA | `all/QF_NIA-all_list-25358.txt` | 25,358 |
 | QF_NRA | `all/QF_NRA-all_list-12134.txt` | 12,134 |
 
-`pure-conjunction/` contains filtered benchmark lists:
+`pure-conjunction/` is the historical directory name for the filtered lists
+whose Boolean abstraction contains no eligible partitioning atom after
+AriParti's preprocessing:
 
 | Logic | File | Records |
 | --- | --- | ---: |
@@ -22,6 +24,10 @@ The paths are relative benchmark identifiers, not local filesystem paths.
 | QF_LRA | `pure-conjunction/QF_LRA-pure_conjunction_list-337.txt` | 337 |
 | QF_NIA | `pure-conjunction/QF_NIA-pure_conjunction_list-1520.txt` | 1,520 |
 | QF_NRA | `pure-conjunction/QF_NRA-pure_conjunction_list-6034.txt` | 6,034 |
+
+The four filtered lists contain 11,957 instances in total. The directory and
+filenames are retained for compatibility with the archived result summaries;
+the eligibility criterion above is the terminology used by the manuscript.
 
 `all/lists_list.txt` is a compact index of the four full benchmark lists.
 `manifest.csv` provides the list metadata and the comparison with the frozen

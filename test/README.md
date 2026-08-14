@@ -14,7 +14,7 @@ This directory contains runnable examples and read-only consistency checks.
   source/prebuilt script identity, and delegated-node state.
 - `validate_evidence.py`: benchmark and result inventories, CPU records and
   collector identity, and all reader-facing parallel, distributed,
-  pure-conjunction, and mechanism summaries.
+  filtered no-eligible-Boolean-atom, and mechanism summaries.
 
 Run all read-only checks from the repository root with:
 

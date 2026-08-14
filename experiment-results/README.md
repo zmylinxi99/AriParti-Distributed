@@ -117,18 +117,19 @@ To regenerate any stale summary files with the same documented rule, use
 
 ## Derived Tables
 
-`parallel/pure-conjunction-p16-summary.csv` is a derived summary. It records
-per-theory QF_LRA, QF_LIA, QF_NRA, and QF_NIA rows together with retained
-linear and nonlinear aggregate rows. Per-theory counts come from joining each
-filtered benchmark list with its p16 per-configuration CSVs. Only `sat` and
-`unsat` are decisive. The
+`parallel/pure-conjunction-p16-summary.csv` is a derived summary whose
+historical filename refers to the filtered lists with no eligible Boolean
+partitioning atom after AriParti's preprocessing. It records per-theory QF_LRA,
+QF_LIA, QF_NRA, and QF_NIA rows together with retained linear and nonlinear
+aggregate rows. Per-theory counts come from joining each filtered benchmark
+list with its p16 per-configuration CSVs. Only `sat` and `unsat` are decisive. The
 `ariparti_faster` and `cvc5_faster` fields compare runtimes only when both
 configurations are decisive; `equal_runtime` records exact ties.
 `neither_solved` records the remaining non-decisive pairs.
 
-`parallel/pure-conjunction-opensmt2-p16-summary.csv` applies the same join and
-outcome semantics to the two linear theories supported by the
-OpenSMT2 comparison. It supports the OpenSMT2 linear panel and the corresponding
+`parallel/pure-conjunction-opensmt2-p16-summary.csv` applies the same criterion,
+join, and outcome semantics to the two linear theories supported by the
+OpenSMT2 comparison. It supports the OpenSMT2 linear panel and corresponding
 aggregate counts in the manuscript.
 
 The full-list result directory uses documented headers for each file.
@@ -164,6 +165,6 @@ The public checker verifies:
 - SHA-256 identity and normalization constants for the CPU collector;
 - all 57 per-run parallel summaries and all 79 rows in the parallel/distributed
   aggregate tables using the documented PAR-2 rule;
-- all nine derived pure-conjunction comparison rows; and
+- all nine derived rows for the filtered no-eligible-Boolean-atom comparisons; and
 - all full-list ablation checksums, row invariants, deltas, benchmark counts,
   and launcher/partitioner identities.
