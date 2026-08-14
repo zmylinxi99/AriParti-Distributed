@@ -1,7 +1,8 @@
 # Mechanism-Comparison Results
 
 `full-list-p8-1200s/` contains the p8/1200-second results for the manuscript's
-BCP–ICP-coupling and contextual clause-reduction comparisons. It covers
+BICP (specifically its BCP--ICP coupling) and contextual clause-reduction
+comparisons. It covers
 QF_LRA, QF_LIA, QF_NRA, and QF_NIA with twelve theory-by-configuration totals
 and eight Full-versus-Disabled comparisons.
 

@@ -189,7 +189,7 @@ material. Paths are relative to this repository.
 | Where are the parallel results? | `experiment-results/parallel/` contains per-instance CSVs and summaries by theory, backend, and CPU-slot budget. Its two top-level `pure-conjunction` summary CSVs retain their historical filenames but contain the derived p16 comparisons on instances with no eligible Boolean partitioning atom after AriParti's preprocessing. |
 | Where are the distributed results? | `experiment-results/distributed/` contains the p512 measurements for all four theories and the QF_NRA 32--512-slot sweep. |
 | Where are the CPU measurements? | `experiment-results/distributed/cpu-usage/` contains 79,387 observations from seven instrumented runs, plus the collector and its sampling, normalization, and aggregation rules. |
-| Where are the BCP–ICP-coupling and contextual clause-reduction comparisons? | `experiment-results/ablation/full-list-p8-1200s/` contains all eight full-versus-disabled aggregate comparisons, the manuscript table, metadata, and checksums. Positive solved-count and PAR-2 deltas favor the full configuration. |
+| Where are the BICP and contextual clause-reduction comparisons? | `experiment-results/ablation/full-list-p8-1200s/` contains all eight full-versus-disabled aggregate comparisons, the manuscript table, metadata, and checksums. The BICP comparison isolates its BCP--ICP coupling by retaining interval contraction in the disabled variant. Positive solved-count and PAR-2 deltas favor the full configuration. |
 | What metadata are available? | `experiment-results/metadata.json` defines aggregation rules and evaluation settings. `experiment-results/manifest.csv` inventories result directories and row counts. |
 
 ### Manuscript Scope and Conventions
@@ -370,8 +370,10 @@ For mechanism-ablation runs, the launcher also accepts:
   Boolean-driven propagation and BICP-derived Boolean facts/simplifications
   while keeping arithmetic interval propagation, the original formula
   constraints, and partition-path bounds.
-- `clause_reduction_enabled: false` keeps value-based subtask extraction but
-  skips theory-level clause simplification and dominated-clause removal.
+- `clause_reduction_enabled: false` retains BICP and contextual truth
+  evaluation, including deletion of false literals and clauses already
+  satisfied by the context, but disables within-clause arithmetic comparisons
+  and dominated-clause removal.
 
 `bicp_enabled: false` requires
 `"ablation": {"allow_no_bicp_ablation": true}` as an explicit opt-in. The
